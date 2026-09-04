@@ -236,10 +236,14 @@ async function callGeminiWithFallback(body: any): Promise<any> {
 }
 
 // Track Gemini quota status to enable instantaneous fallback
-let isGeminiQuotaExhausted = false
+export let isGeminiQuotaExhausted = false
 
 export function resetGeminiQuotaStatus() {
   isGeminiQuotaExhausted = false
+}
+
+export function getGeminiQuotaStatus(): boolean {
+  return isGeminiQuotaExhausted
 }
 
 /**
@@ -258,7 +262,7 @@ export async function getGeminiSupportResponse(
 /**
  * Legacy Gemini function kept for future reactivation:
  */
-async function _legacyGeminiCall(
+export async function _legacyGeminiCall(
   query: string,
   history: ChatMessage[],
   attachedDocs: AttachedDocument[] = []
