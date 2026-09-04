@@ -14,6 +14,7 @@ import {
   mcpCreatePaymentLink,
   mcpCreateOrder,
 } from "./mcpClient"
+import { getGeminiSupportResponse } from "./gemini"
 
 export type ChatMessage = {
   text: string
@@ -25,8 +26,36 @@ const CLAUDE_API_KEY =
   """"
 
 const CLAUDE_MODEL = "claude-haiku-4-5-20251001"
-const CLAUDE_BASE_URL =
-  typeof window !== "undefined" ? "/api/claude/messages" : "https://api.anthropic.com/v1/messages"
+const ANTHROPIC_DIRECT_URL = "https://api.anthropic.com/v1/messages"
+const PROXY_CLAUDE_URL = "/api/claude/messages"
+
+/**
+ * Robust fetcher: calls direct Anthropic API with direct browser CORS support,
+ * and falls back to proxy URL if direct network request fails.
+ */
+async function postClaudeMessage(body: any, headers: Record<string, string>): Promise<Response> {
+  // 1. Direct Anthropic API call (supports CORS natively with anthropic-dangerous-direct-browser-access)
+  try {
+    const directRes = await fetch(ANTHROPIC_DIRECT_URL, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+    })
+    // If not a 405 Method Not Allowed, return response
+    if (directRes.status !== 405) {
+      return directRes
+    }
+  } catch (directErr) {
+    console.warn("[Claude Service] Direct Anthropic API call failed, attempting proxy fallback:", directErr)
+  }
+
+  // 2. Fallback to proxy (works in Vite dev server or Cloudflare Pages Function)
+  return await fetch(PROXY_CLAUDE_URL, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+  })
+}
 
 const CLAUDE_TOOLS = [
   {
@@ -289,82 +318,90 @@ Formatting Guidelines:
     "content-type": "application/json",
   }
 
-  // 1. First Call to Claude
-  const res1 = await fetch(CLAUDE_BASE_URL, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({
-      model: CLAUDE_MODEL,
-      max_tokens: 1000,
-      system,
-      tools: CLAUDE_TOOLS,
-      messages,
-    }),
-  })
-
-  if (!res1.ok) {
-    const errText = await res1.text()
-    throw new Error(`Claude API returned status ${res1.status}: ${errText}`)
-  }
-
-  const data1 = await res1.json()
-  const content = data1.content || []
-
-  // Check for tool use
-  const toolUseBlock = content.find((block: any) => block.type === "tool_use")
-
-  if (toolUseBlock) {
-    const { id: toolUseId, name, input } = toolUseBlock
-    const toolOutput = await executeRazorpayTool(name, input)
-
-    // Add assistant's tool use response to messages
-    messages.push({
-      role: "assistant",
-      content,
-    })
-
-    // Add user's tool result to messages
-    messages.push({
-      role: "user",
-      content: [
-        {
-          type: "tool_result",
-          tool_use_id: toolUseId,
-          content: JSON.stringify(toolOutput),
-        },
-      ],
-    })
-
-    // 2. Second Call to Claude to generate natural answer
-    const res2 = await fetch(CLAUDE_BASE_URL, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
+  try {
+    // 1. First Call to Claude
+    const res1 = await postClaudeMessage(
+      {
         model: CLAUDE_MODEL,
         max_tokens: 1000,
         system,
         tools: CLAUDE_TOOLS,
         messages,
-      }),
-    })
+      },
+      headers
+    )
 
-    if (!res2.ok) {
-      const errText2 = await res2.text()
-      throw new Error(`Claude API step 2 returned status ${res2.status}: ${errText2}`)
+    if (!res1.ok) {
+      const errText = await res1.text()
+      throw new Error(`Claude API returned status ${res1.status}: ${errText}`)
     }
 
-    const data2 = await res2.json()
-    const textBlock = (data2.content || []).find((b: any) => b.type === "text")
-    if (textBlock && textBlock.text) {
-      return textBlock.text.trim()
+    const data1 = await res1.json()
+    const content = data1.content || []
+
+    // Check for tool use
+    const toolUseBlock = content.find((block: any) => block.type === "tool_use")
+
+    if (toolUseBlock) {
+      const { id: toolUseId, name, input } = toolUseBlock
+      const toolOutput = await executeRazorpayTool(name, input)
+
+      // Add assistant's tool use response to messages
+      messages.push({
+        role: "assistant",
+        content,
+      })
+
+      // Add user's tool result to messages
+      messages.push({
+        role: "user",
+        content: [
+          {
+            type: "tool_result",
+            tool_use_id: toolUseId,
+            content: JSON.stringify(toolOutput),
+          },
+        ],
+      })
+
+      // 2. Second Call to Claude to generate natural answer
+      const res2 = await postClaudeMessage(
+        {
+          model: CLAUDE_MODEL,
+          max_tokens: 1000,
+          system,
+          tools: CLAUDE_TOOLS,
+          messages,
+        },
+        headers
+      )
+
+      if (!res2.ok) {
+        const errText2 = await res2.text()
+        throw new Error(`Claude API step 2 returned status ${res2.status}: ${errText2}`)
+      }
+
+      const data2 = await res2.json()
+      const textBlock = (data2.content || []).find((b: any) => b.type === "text")
+      if (textBlock && textBlock.text) {
+        return textBlock.text.trim()
+      }
+    }
+
+    // Direct text block
+    const directText = content.find((b: any) => b.type === "text")
+    if (directText && directText.text) {
+      return directText.text.trim()
+    }
+
+    throw new Error("No text response received from Claude.")
+  } catch (claudeErr: any) {
+    console.warn("[Claude Service] Claude request failed, attempting Gemini Flash fallback:", claudeErr.message)
+    try {
+      return await getGeminiSupportResponse(query, history, attachedDocs)
+    } catch (geminiErr: any) {
+      console.error("[Claude Service] Both Claude and Gemini fallbacks failed:", geminiErr)
+      throw claudeErr
     }
   }
-
-  // Direct text block
-  const directText = content.find((b: any) => b.type === "text")
-  if (directText && directText.text) {
-    return directText.text.trim()
-  }
-
-  throw new Error("No text response received from Claude.")
 }

@@ -8,8 +8,13 @@ import {
   mcpCreatePaymentLink,
   mcpCreateOrder,
 } from "./mcpClient"
-import { getClaudeSupportResponse, type AttachedDocument } from "./claude"
-export type { AttachedDocument }
+
+export type AttachedDocument = {
+  name: string
+  type?: string
+  size?: string
+  content?: string
+}
 
 export type ChatMessage = {
   text: string
@@ -247,16 +252,14 @@ export function getGeminiQuotaStatus(): boolean {
 }
 
 /**
- * Google Gemini is currently disabled by user preference.
- * All requests route 100% directly to Anthropic Claude Haiku.
+ * Executes Google Gemini 2.5 Flash with full Model Context Protocol tools.
  */
 export async function getGeminiSupportResponse(
   query: string,
   history: ChatMessage[],
   attachedDocs: AttachedDocument[] = []
 ): Promise<string> {
-  console.log("[AI] Gemini is disabled. Routing directly to Anthropic Claude...")
-  return await getClaudeSupportResponse(query, history, attachedDocs)
+  return await _legacyGeminiCall(query, history, attachedDocs)
 }
 
 /**
@@ -387,14 +390,8 @@ Multilingual support: Automatically match the user's language (English, Hindi, e
     ) {
       isGeminiQuotaExhausted = true
     }
-    console.warn("[AI] Gemini failed, falling back immediately to Anthropic Claude:", err.message)
-    try {
-      const claudeReply = await getClaudeSupportResponse(query, history, attachedDocs)
-      return claudeReply
-    } catch (claudeErr: any) {
-      console.error("[AI] Both Gemini and Claude fallbacks failed:", claudeErr)
-      throw new Error(`AI Service Error: ${claudeErr.message || err.message}`)
-    }
+    console.error("[AI] Gemini execution error:", err.message)
+    throw new Error(`Gemini API Error: ${err.message}`)
   }
 }
 
