@@ -14,8 +14,11 @@ export interface RazorpayCredentials {
 const STORAGE_KEY_ID = "rzp_client_key_id"
 const STORAGE_KEY_SECRET = "rzp_client_key_secret"
 
+export const DEFAULT_RAZORPAY_KEY_ID = "rzp_test_TXGOvB8QfR3rW2"
+export const DEFAULT_RAZORPAY_KEY_SECRET = "B17NfXAZpBZ8o9f1Lt6VrQmK"
+
 /**
- * Get active Razorpay credentials from localStorage or Vite environment variables
+ * Get active Razorpay credentials from localStorage, Vite environment variables, or preconfigured defaults
  */
 export function getRazorpayCredentials(): RazorpayCredentials {
   const envKeyId = import.meta.env.VITE_RAZORPAY_KEY_ID || ""
@@ -24,8 +27,15 @@ export function getRazorpayCredentials(): RazorpayCredentials {
   const storedKeyId = typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY_ID) || "" : ""
   const storedKeySecret = typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY_SECRET) || "" : ""
 
-  const keyId = storedKeyId || (envKeyId.includes("YOUR_KEY") ? "" : envKeyId)
-  const keySecret = storedKeySecret || (envKeySecret.includes("YOUR_KEY") ? "" : envKeySecret)
+  const keyId =
+    (storedKeyId && !storedKeyId.includes("YOUR_KEY") ? storedKeyId : "") ||
+    (envKeyId && !envKeyId.includes("YOUR_KEY") ? envKeyId : "") ||
+    DEFAULT_RAZORPAY_KEY_ID
+
+  const keySecret =
+    (storedKeySecret && !storedKeySecret.includes("YOUR_KEY") ? storedKeySecret : "") ||
+    (envKeySecret && !envKeySecret.includes("YOUR_KEY") ? envKeySecret : "") ||
+    DEFAULT_RAZORPAY_KEY_SECRET
 
   const isConfigured = Boolean(
     keyId &&
