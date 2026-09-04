@@ -1,0 +1,50 @@
+{
+  "invoice_number": "INV-2026-09-002",
+  "receipt_id": "rcpt_mcp_002",
+  "order_id": "order_TXGPnb2izSqLLF",
+  "invoice_date": "2026-09-02T23:45:44+05:30",
+  "due_date": "2026-09-09T23:45:44+05:30",
+  "status": "UNPAID",
+  "payment_provider": "Razorpay",
+  "currency": "INR",
+  "merchant": {
+    "business_name": "CloudTech Solutions Pvt Ltd",
+    "gstin": "29AAAAA0000A1Z5",
+    "support_email": "billing@cloudtech.example.com",
+    "address": "Level 4, Tech Park, Koramangala, Bengaluru, KA 560034"
+  },
+  "customer": {
+    "name": "Aryan Sharma",
+    "email": "aryan.sharma@example.com",
+    "phone": "+91 98765 43210",
+    "billing_address": "#42, 3rd Cross, Indiranagar, Bengaluru, KA 560038"
+  },
+  "line_items": [
+    {
+      "description": "Cloud Developer Suite - Pro Subscription (Annual Plan)",
+      "hsn_code": "998313",
+      "quantity": 1,
+      "unit_price": 1270.34,
+      "taxable_amount": 1270.34,
+      "cgst_rate": 9.0,
+      "cgst_amount": 114.33,
+      "sgst_rate": 9.0,
+      "sgst_amount": 114.33,
+      "total_amount": 1499.00
+    }
+  ],
+  "financial_summary": {
+    "subtotal": 1270.34,
+    "cgst": 114.33,
+    "sgst": 114.33,
+    "total_amount": 1499.00,
+    "amount_paid": 0.00,
+    "amount_due": 1499.00,
+    "payment_attempts": 0
+  },
+  "payment_instructions": {
+    "order_id": "order_TXGPnb2izSqLLF",
+    "portal_url": "https://dashboard.razorpay.com/app/orders/order_TXGPnb2izSqLLF",
+    "accepted_methods": ["UPI", "Credit Card", "Debit Card", "NetBanking"]
+  }
+}

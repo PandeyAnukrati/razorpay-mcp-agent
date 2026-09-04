@@ -1,0 +1,34 @@
+================================================================================
+                                TAX INVOICE
+================================================================================
+Invoice No:    INV-2026-09-002                Invoice Date:  02 Sep 2026, 11:45 PM
+Order ID:      order_TXGPnb2izSqLLF           Due Date:      09 Sep 2026
+Receipt No:    rcpt_mcp_002                   Payment Status: UNPAID (Created)
+--------------------------------------------------------------------------------
+MERCHANT DETAILS:                             BILLED TO:
+CloudTech Solutions Pvt Ltd                   Aryan Sharma
+GSTIN: 29AAAAA0000A1Z5                        Email: aryan.sharma@example.com
+Koramangala, Bengaluru, KA 560034             Phone: +91 98765 43210
+Email: billing@cloudtech.example.com          Indiranagar, Bengaluru, KA 560038
+================================================================================
+DESCRIPTION                              HSN     QTY     RATE (₹)     AMOUNT (₹)
+--------------------------------------------------------------------------------
+Cloud Developer Suite - Pro (Annual)    998313    1      1,270.34      1,270.34
+================================================================================
+TAX BREAKDOWN:
+  Taxable Value:                                                      ₹1,270.34
+  CGST (9%):                                                            ₹114.33
+  SGST (9%):                                                            ₹114.33
+--------------------------------------------------------------------------------
+TOTAL INVOICE AMOUNT:                                                 ₹1,499.00
+AMOUNT RECEIVED / PAID:                                                   ₹0.00
+BALANCE DUE:                                                          ₹1,499.00
+================================================================================
+PAYMENT SUMMARY:
+  Payment Gateway:      Razorpay
+  Razorpay Order ID:    order_TXGPnb2izSqLLF
+  Payment Attempts:     0
+  Payment Link:         https://dashboard.razorpay.com/app/orders/order_TXGPnb2izSqLLF
+  Accepted Modes:       UPI, NetBanking, Debit/Credit Card
+================================================================================
+                     Thank you for your business!

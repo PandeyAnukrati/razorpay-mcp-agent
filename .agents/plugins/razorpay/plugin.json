@@ -1,0 +1,5 @@
+{
+  "name": "razorpay",
+  "description": "Official Razorpay MCP tools for payments, orders, refunds, and settlements.",
+  "version": "1.0.0"
+}

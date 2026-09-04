@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "razorpay": {
+      "command": "node",
+      "args": ["./mcp-server/index.mjs"],
+      "env": {
+        "NODE_ENV": "development"
+      }
+    }
+  }
+}

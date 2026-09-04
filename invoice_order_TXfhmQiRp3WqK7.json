@@ -1,0 +1,50 @@
+{
+  "invoice_number": "INV-2026-09-003",
+  "receipt_id": "rcpt_unpaid_05927_01",
+  "order_id": "order_TXfhmQiRp3WqK7",
+  "invoice_date": "2026-09-04T00:30:00+05:30",
+  "due_date": "2026-09-11T00:30:00+05:30",
+  "status": "UNPAID",
+  "payment_provider": "Razorpay",
+  "currency": "INR",
+  "merchant": {
+    "business_name": "CloudTech Solutions Pvt Ltd",
+    "gstin": "29AAAAA0000A1Z5",
+    "support_email": "billing@cloudtech.example.com",
+    "address": "Level 4, Tech Park, Koramangala, Bengaluru, KA 560034"
+  },
+  "customer": {
+    "name": "Aarav Patel",
+    "email": "aarav.patel@example.com",
+    "phone": "+91 98765 01234",
+    "billing_address": "#15, Silicon Avenue, HSR Layout, Bengaluru, KA 560102"
+  },
+  "line_items": [
+    {
+      "description": "Starter Cloud Subscription (Annual)",
+      "hsn_code": "998313",
+      "quantity": 1,
+      "unit_price": 1100.85,
+      "taxable_amount": 1100.85,
+      "cgst_rate": 9.0,
+      "cgst_amount": 99.08,
+      "sgst_rate": 9.0,
+      "sgst_amount": 99.07,
+      "total_amount": 1299.00
+    }
+  ],
+  "financial_summary": {
+    "subtotal": 1100.85,
+    "cgst": 99.08,
+    "sgst": 99.07,
+    "total_amount": 1299.00,
+    "amount_paid": 0.00,
+    "amount_due": 1299.00,
+    "payment_attempts": 0
+  },
+  "payment_instructions": {
+    "order_id": "order_TXfhmQiRp3WqK7",
+    "portal_url": "https://dashboard.razorpay.com/app/orders/order_TXfhmQiRp3WqK7",
+    "accepted_methods": ["UPI", "Credit Card", "Debit Card", "NetBanking"]
+  }
+}
