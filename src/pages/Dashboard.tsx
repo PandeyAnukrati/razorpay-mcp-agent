@@ -48,6 +48,7 @@ import {
   type ChatSession,
   type Message,
   type UploadedFile,
+  getInitialDefaultSession,
   subscribeToUserSessions,
   saveSessionToFirebase,
   deleteSessionFromFirebase,
@@ -89,7 +90,7 @@ function readFileAsText(file: File): Promise<string> {
 
 export function Dashboard() {
   const navigate = useNavigate()
-  const [user, setUser] = useState<any>(null)
+  const [user, setUser] = useState<any>(() => auth.currentUser)
   const [currentView, setCurrentView] = useState<"menu" | "chat" | "sessions-list" | "webhooks">(() => {
     return (safeStorageGet("rzp_current_view", "menu") as any)
   })
@@ -97,10 +98,34 @@ export function Dashboard() {
     const saved = safeStorageGet("rzp_back_view", "menu")
     return saved === "sessions-list" ? "sessions-list" : "menu"
   })
-  const [activeSessionId, setActiveSessionId] = useState<string | null>(() => {
-    return safeStorageGet("rzp_active_session_id", "") || null
+  const [activeSessionId, setActiveSessionId] = useState<string>(() => {
+    return safeStorageGet("rzp_active_session_id", "") || "CHAT-MCP-01"
   })
-  const [sessions, setSessions] = useState<ChatSession[]>([])
+  const [sessions, setSessions] = useState<ChatSession[]>(() => {
+    try {
+      const cached = safeStorageGet("rzp_cached_sessions", "")
+      if (cached) {
+        const parsed = JSON.parse(cached)
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed
+      }
+    } catch {}
+    return [getInitialDefaultSession(auth.currentUser?.uid || "guest_user")]
+  })
+
+  // Automatically keep cached sessions updated in localStorage
+  useEffect(() => {
+    if (sessions.length > 0) {
+      try {
+        const clean = sessions.map((s) => ({
+          ...s,
+          files: (s.files || []).map((f) => ({ ...f, previewUrl: undefined })),
+        }))
+        safeStorageSet("rzp_cached_sessions", JSON.stringify(clean))
+      } catch (err) {
+        console.warn("Could not cache sessions locally:", err)
+      }
+    }
+  }, [sessions])
 
   // Keep navigation view and active session synced safely
   useEffect(() => {
@@ -144,7 +169,7 @@ export function Dashboard() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const processedWebhookIdsRef = useRef<Set<string>>(new Set())
 
-  const activeSession = sessions.find((s) => s.id === activeSessionId)
+  const activeSession = sessions.find((s) => s.id === activeSessionId) || sessions[0]
   const activeMessages = activeSession ? activeSession.messages : []
   const activeFiles = activeSession ? activeSession.files : []
 
@@ -160,23 +185,55 @@ export function Dashboard() {
         await migrateLocalStorageToFirestore(authUser.uid)
 
         // 2. Real-time subscription to Firestore sessions
-        unsubscribeSessions = subscribeToUserSessions(authUser.uid, (loadedSessions) => {
-          setSessions(loadedSessions)
+        unsubscribeSessions = subscribeToUserSessions(
+          authUser.uid,
+          (loadedSessions) => {
+            if (!loadedSessions || loadedSessions.length === 0) return
 
-          // Restore active session or pick the first available
-          const savedActiveId = safeStorageGet("rzp_active_session_id", "")
-          if (savedActiveId && loadedSessions.some((s) => s.id === savedActiveId)) {
-            setActiveSessionId(savedActiveId)
-          } else if (loadedSessions.length > 0) {
-            setActiveSessionId((prev) =>
-              prev && loadedSessions.some((s) => s.id === prev) ? prev : loadedSessions[0].id
-            )
+            setSessions((prevSessions) => {
+              // Intelligent Merge: Do not let a stale remote snapshot wipe out newly sent local messages!
+              const merged = loadedSessions.map((remote) => {
+                const local = prevSessions.find((s) => s.id === remote.id)
+                if (!local) return remote
+
+                // If local has more messages than remote, keep local's extra messages!
+                if (local.messages.length > remote.messages.length) {
+                  const remoteMsgIds = new Set(remote.messages.map((m) => m.id))
+                  const unsynced = local.messages.filter((m) => !remoteMsgIds.has(m.id))
+                  return {
+                    ...remote,
+                    messages: [...remote.messages, ...unsynced],
+                  }
+                }
+                return remote
+              })
+
+              // Preserve any newly created local sessions that haven't hit the server yet
+              const remoteIds = new Set(loadedSessions.map((s) => s.id))
+              const localOnlySessions = prevSessions.filter((s) => !remoteIds.has(s.id))
+              return [...localOnlySessions, ...merged]
+            })
+
+            // Restore active session or pick the first available
+            setActiveSessionId((prevActive) => {
+              if (prevActive && loadedSessions.some((s) => s.id === prevActive)) {
+                return prevActive
+              }
+              const savedActiveId = safeStorageGet("rzp_active_session_id", "")
+              if (savedActiveId && loadedSessions.some((s) => s.id === savedActiveId)) {
+                return savedActiveId
+              }
+              return prevActive || loadedSessions[0]?.id || "CHAT-MCP-01"
+            })
+          },
+          (err) => {
+            console.warn("Firestore subscription error, remaining in resilient local mode:", err)
           }
-        })
+        )
       } else {
         if (unsubscribeSessions) unsubscribeSessions()
         setUser(null)
-        setSessions([])
+        // Keep existing sessions in memory/cache so chat NEVER vanishes even if logged out or guest!
       }
     })
 
@@ -344,11 +401,11 @@ export function Dashboard() {
   }
 
   const handleStartNewChat = async () => {
-    if (!user) return
+    const currentUid = user?.uid || "guest_user"
     const newId = `CHAT-${Math.floor(1000 + Math.random() * 9000)}`
     const newSession: ChatSession = {
       id: newId,
-      uid: user.uid,
+      uid: currentUid,
       subject: "New Support Chat",
       status: "Open",
       priority: "Medium",
@@ -382,12 +439,20 @@ export function Dashboard() {
 
   const handleDeleteSession = async (e: React.MouseEvent, sessionId: string) => {
     e.stopPropagation()
-    if (!user?.uid) return
-    setSessions((prev) => prev.filter((s) => s.id !== sessionId))
+    setSessions((prev) => {
+      const remaining = prev.filter((s) => s.id !== sessionId)
+      if (remaining.length === 0) {
+        return [getInitialDefaultSession(user?.uid || "guest_user")]
+      }
+      return remaining
+    })
     if (activeSessionId === sessionId) {
-      setActiveSessionId(null)
+      const remaining = sessions.filter((s) => s.id !== sessionId)
+      setActiveSessionId(remaining[0]?.id || "CHAT-MCP-01")
     }
-    await deleteSessionFromFirebase(user.uid, sessionId).catch(console.error)
+    if (user?.uid) {
+      await deleteSessionFromFirebase(user.uid, sessionId).catch(console.error)
+    }
   }
 
   const handleSaveKeys = (e: React.FormEvent) => {
@@ -495,7 +560,12 @@ export function Dashboard() {
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!inputText.trim() || !activeSessionId || !user) return
+    if (!inputText.trim()) return
+
+    const targetSessionId = activeSessionId || sessions[0]?.id || "CHAT-MCP-01"
+    if (!activeSessionId) {
+      setActiveSessionId(targetSessionId)
+    }
 
     const userMsg: Message = {
       id: Date.now().toString(),
@@ -518,8 +588,10 @@ export function Dashboard() {
 
     // Update session state & Firebase Firestore
     let userSessionToSave: ChatSession | undefined
+    let hasUpdated = false
     const updatedWithUser = sessions.map((s) => {
-      if (s.id === activeSessionId) {
+      if (s.id === targetSessionId) {
+        hasUpdated = true
         userSessionToSave = {
           ...s,
           subject: updatedSubject,
@@ -529,7 +601,23 @@ export function Dashboard() {
       }
       return s
     })
-    setSessions(updatedWithUser)
+
+    if (!hasUpdated) {
+      userSessionToSave = {
+        id: targetSessionId,
+        uid: user?.uid || "guest_user",
+        subject: updatedSubject,
+        status: "Open",
+        priority: "Medium",
+        date: "Today",
+        messages: [userMsg],
+        files: [],
+      }
+      setSessions([userSessionToSave, ...sessions])
+    } else {
+      setSessions(updatedWithUser)
+    }
+
     if (user?.uid && userSessionToSave) {
       saveSessionToFirebase(user.uid, userSessionToSave).catch(console.error)
     }
@@ -561,7 +649,7 @@ export function Dashboard() {
       let agentSessionToSave: ChatSession | undefined
       setSessions((prev) => {
         const next = prev.map((s) => {
-          if (s.id === activeSessionId) {
+          if (s.id === targetSessionId) {
             agentSessionToSave = {
               ...s,
               messages: [...s.messages, agentMsg],
@@ -592,7 +680,7 @@ export function Dashboard() {
       let fallbackSessionToSave: ChatSession | undefined
       setSessions((prev) => {
         const next = prev.map((s) => {
-          if (s.id === activeSessionId) {
+          if (s.id === targetSessionId) {
             fallbackSessionToSave = {
               ...s,
               messages: [...s.messages, agentMsg],
@@ -613,7 +701,8 @@ export function Dashboard() {
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const fileList = e.target.files
-    if (!fileList || !activeSessionId || !user) return
+    const targetSessionId = activeSessionId || sessions[0]?.id || "CHAT-MCP-01"
+    if (!fileList) return
 
     const filesArray = Array.from(fileList)
 
@@ -703,7 +792,7 @@ export function Dashboard() {
       let fileSessionToSave: ChatSession | undefined
       setSessions((prev) => {
         const next = prev.map((s) => {
-          if (s.id === activeSessionId) {
+          if (s.id === targetSessionId) {
             fileSessionToSave = {
               ...s,
               files: [...s.files, newFile],
@@ -724,11 +813,11 @@ export function Dashboard() {
   }
 
   const handleDeleteFile = (fileId: string) => {
-    if (!activeSessionId || !user) return
+    const targetSessionId = activeSessionId || sessions[0]?.id || "CHAT-MCP-01"
     let deletedFileSession: ChatSession | undefined
     setSessions((prev) => {
       const next = prev.map((s) => {
-        if (s.id === activeSessionId) {
+        if (s.id === targetSessionId) {
           deletedFileSession = { ...s, files: s.files.filter((f) => f.id !== fileId) }
           return deletedFileSession
         }
