@@ -241,9 +241,8 @@ export function Auth() {
             variant="outline"
             onClick={() => {
               localStorage.setItem("rzp_merchant_logged_in", "true")
-              localStorage.setItem("rzp_merchant_email", "merchant@razorpay.com")
               localStorage.setItem("rzp_current_view", "merchant")
-              navigate("/dashboard")
+              navigate("/dashboard", { state: { view: "merchant" } })
             }}
             className="h-9 px-3.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 font-medium text-xs shadow-xs flex items-center gap-1.5 cursor-pointer"
           >
@@ -349,7 +348,7 @@ export function Auth() {
               </div>
 
               {/* Form fields */}
-              <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+              <form onSubmit={handleSubmit} autoComplete="off" className="flex flex-col gap-4">
                 {error && (
                   <div className="rounded-2xl bg-destructive/10 p-3 text-xs font-semibold text-destructive">
                     {error}
@@ -386,6 +385,9 @@ export function Auth() {
                     <Mail className="absolute left-4 h-4.5 w-4.5 text-muted-foreground/60" />
                     <input
                       type="email"
+                      id="support_user_email"
+                      name="support_user_email"
+                      autoComplete="off"
                       placeholder="name@company.com"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
@@ -413,6 +415,9 @@ export function Auth() {
                     <Lock className="absolute left-4 h-4.5 w-4.5 text-muted-foreground/60" />
                     <input
                       type={showPassword ? "text" : "password"}
+                      id="support_user_password"
+                      name="support_user_password"
+                      autoComplete="new-password"
                       placeholder="••••••••"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}

@@ -111,11 +111,11 @@ export function Dashboard() {
     return safeStorageGet("rzp_merchant_logged_in", "false") === "true"
   })
   const [merchantEmail, setMerchantEmail] = useState<string>(() => {
-    return safeStorageGet("rzp_merchant_email", "merchant@razorpay.com")
+    return safeStorageGet("rzp_merchant_email", "")
   })
   const [isMerchantModalOpen, setIsMerchantModalOpen] = useState<boolean>(false)
-  const [loginEmailInput, setLoginEmailInput] = useState<string>("merchant@razorpay.com")
-  const [loginPasswordInput, setLoginPasswordInput] = useState<string>("Merchant2026!")
+  const [loginEmailInput, setLoginEmailInput] = useState<string>("")
+  const [loginPasswordInput, setLoginPasswordInput] = useState<string>("")
   const [loginError, setLoginError] = useState<string>("")
   const [activeSessionId, setActiveSessionId] = useState<string>(() => {
     return safeStorageGet("rzp_active_session_id", "") || "CHAT-MCP-01"
@@ -558,7 +558,11 @@ export function Dashboard() {
 
   const handleMerchantFormSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault()
-    const email = (loginEmailInput && loginEmailInput.trim()) || "merchant@razorpay.com"
+    if (!loginEmailInput || !loginEmailInput.trim()) {
+      setLoginError("Please enter your merchant email address.")
+      return
+    }
+    const email = loginEmailInput.trim()
     setIsMerchantLoggedIn(true)
     setMerchantEmail(email)
     safeStorageSet("rzp_merchant_logged_in", "true")
@@ -1829,17 +1833,19 @@ export function Dashboard() {
               )}
 
               {/* Merchant Login Form */}
-              <form onSubmit={handleMerchantFormSubmit} className="space-y-3">
+              <form onSubmit={handleMerchantFormSubmit} autoComplete="off" className="space-y-3">
                 <div>
                   <label className="block text-xs font-medium text-slate-700 mb-1">
                     Merchant Email
                   </label>
                   <input
                     type="email"
+                    name="merchant_login_email"
+                    autoComplete="off"
                     value={loginEmailInput}
                     onChange={(e) => setLoginEmailInput(e.target.value)}
                     className="w-full h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#305EFF] focus:ring-1 focus:ring-[#305EFF]"
-                    placeholder="merchant@razorpay.com"
+                    placeholder="merchant@example.com"
                   />
                 </div>
 
@@ -1849,6 +1855,8 @@ export function Dashboard() {
                   </label>
                   <input
                     type="password"
+                    name="merchant_login_password"
+                    autoComplete="current-password"
                     value={loginPasswordInput}
                     onChange={(e) => setLoginPasswordInput(e.target.value)}
                     className="w-full h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#305EFF] focus:ring-1 focus:ring-[#305EFF]"

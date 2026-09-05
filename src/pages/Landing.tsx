@@ -10,8 +10,8 @@ export function Landing() {
 
   // Merchant Login Modal state
   const [isMerchantModalOpen, setIsMerchantModalOpen] = useState(false)
-  const [merchantEmail, setMerchantEmail] = useState("merchant@razorpay.com")
-  const [merchantPassword, setMerchantPassword] = useState("Merchant2026!")
+  const [merchantEmail, setMerchantEmail] = useState("")
+  const [merchantPassword, setMerchantPassword] = useState("")
   const [errorMsg, setErrorMsg] = useState("")
 
   useEffect(() => {
@@ -43,7 +43,11 @@ export function Landing() {
   // Merchant Form Submit
   const handleMerchantSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault()
-    const email = (merchantEmail && merchantEmail.trim()) || "merchant@razorpay.com"
+    if (!merchantEmail || !merchantEmail.trim()) {
+      setErrorMsg("Please enter your merchant email address.")
+      return
+    }
+    const email = merchantEmail.trim()
     try {
       localStorage.setItem("rzp_merchant_logged_in", "true")
       localStorage.setItem("rzp_merchant_email", email)
@@ -162,17 +166,19 @@ export function Landing() {
               )}
 
               {/* Merchant Login Form */}
-              <form onSubmit={handleMerchantSubmit} className="space-y-3">
+              <form onSubmit={handleMerchantSubmit} autoComplete="off" className="space-y-3">
                 <div>
                   <label className="block text-xs font-medium text-slate-700 mb-1">
                     Merchant Email
                   </label>
                   <input
                     type="email"
+                    name="merchant_login_email"
+                    autoComplete="off"
                     value={merchantEmail}
                     onChange={(e) => setMerchantEmail(e.target.value)}
                     className="w-full h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#305EFF] focus:ring-1 focus:ring-[#305EFF]"
-                    placeholder="merchant@razorpay.com"
+                    placeholder="merchant@example.com"
                   />
                 </div>
 
@@ -182,6 +188,8 @@ export function Landing() {
                   </label>
                   <input
                     type="password"
+                    name="merchant_login_password"
+                    autoComplete="current-password"
                     value={merchantPassword}
                     onChange={(e) => setMerchantPassword(e.target.value)}
                     className="w-full h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#305EFF] focus:ring-1 focus:ring-[#305EFF]"

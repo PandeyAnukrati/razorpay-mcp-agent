@@ -39,7 +39,7 @@ interface MerchantPortalProps {
 
 type TabKey = "claims" | "tickets" | "customers" | "payments"
 
-export function MerchantPortal({ onSignOut, merchantEmail = "merchant@razorpay.com" }: MerchantPortalProps) {
+export function MerchantPortal({ onSignOut, merchantEmail = "" }: MerchantPortalProps) {
   const [activeTab, setActiveTab] = useState<TabKey>("claims")
   const [claims, setClaims] = useState<RefundClaim[]>([])
   const [tickets, setTickets] = useState<ChatSession[]>([])
@@ -396,8 +396,8 @@ export function MerchantPortal({ onSignOut, merchantEmail = "merchant@razorpay.c
               M
             </div>
             <div className="min-w-0 flex-1">
-              <div className="text-xs font-semibold text-slate-800 truncate" title={merchantEmail}>
-                {merchantEmail}
+              <div className="text-xs font-semibold text-slate-800 truncate" title={merchantEmail || "Merchant Account"}>
+                {merchantEmail || "Merchant Account"}
               </div>
               <div className="text-[10px] text-slate-400">Authorized Merchant</div>
             </div>
