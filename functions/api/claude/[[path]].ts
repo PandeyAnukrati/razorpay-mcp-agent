@@ -19,6 +19,12 @@ export const onRequest: any = async (context: any) => {
   const modifiedHeaders = new Headers(context.request.headers)
   modifiedHeaders.delete("host")
 
+  // Inject server-side Anthropic API key if configured in Cloudflare Pages environment/secrets
+  const serverKey = context.env?.ANTHROPIC_API_KEY || context.env?.VITE_ANTHROPIC_API_KEY
+  if (serverKey) {
+    modifiedHeaders.set("x-api-key", serverKey)
+  }
+
   const response = await fetch(targetUrl, {
     method: context.request.method,
     headers: modifiedHeaders,

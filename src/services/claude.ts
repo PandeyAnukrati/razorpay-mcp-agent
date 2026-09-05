@@ -21,9 +21,7 @@ export type ChatMessage = {
   isUser: boolean
 }
 
-const CLAUDE_API_KEY =
-  import.meta.env.VITE_ANTHROPIC_API_KEY ||
-  """"
+const CLAUDE_API_KEY = (import.meta.env.VITE_ANTHROPIC_API_KEY || "").trim()
 
 const CLAUDE_MODEL = "claude-haiku-4-5-20251001"
 const ANTHROPIC_DIRECT_URL = "https://api.anthropic.com/v1/messages"
@@ -34,22 +32,24 @@ const PROXY_CLAUDE_URL = "/api/claude/messages"
  * and falls back to proxy URL if direct network request fails.
  */
 async function postClaudeMessage(body: any, headers: Record<string, string>): Promise<Response> {
-  // 1. Direct Anthropic API call (supports CORS natively with anthropic-dangerous-direct-browser-access)
-  try {
-    const directRes = await fetch(ANTHROPIC_DIRECT_URL, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(body),
-    })
-    // If not a 405 Method Not Allowed, return response
-    if (directRes.status !== 405) {
-      return directRes
+  // 1. Direct Anthropic API call if key is provided in client
+  if (headers["x-api-key"]) {
+    try {
+      const directRes = await fetch(ANTHROPIC_DIRECT_URL, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+      })
+      // If not a 405 Method Not Allowed, return response
+      if (directRes.status !== 405) {
+        return directRes
+      }
+    } catch (directErr) {
+      console.warn("[Claude Service] Direct Anthropic API call failed, attempting proxy fallback:", directErr)
     }
-  } catch (directErr) {
-    console.warn("[Claude Service] Direct Anthropic API call failed, attempting proxy fallback:", directErr)
   }
 
-  // 2. Fallback to proxy (works in Vite dev server or Cloudflare Pages Function)
+  // 2. Fallback to proxy (works in Vite dev server or Cloudflare Pages Function where key is kept server-side)
   return await fetch(PROXY_CLAUDE_URL, {
     method: "POST",
     headers,
@@ -312,10 +312,12 @@ Formatting Guidelines:
 - Keep responses concise, polite, professional, and visually structured.${docContextPrompt}`
 
   const headers: Record<string, string> = {
-    "x-api-key": CLAUDE_API_KEY,
     "anthropic-version": "2023-06-01",
-    "anthropic-dangerous-direct-browser-access": "true",
     "content-type": "application/json",
+  }
+  if (CLAUDE_API_KEY) {
+    headers["x-api-key"] = CLAUDE_API_KEY
+    headers["anthropic-dangerous-direct-browser-access"] = "true"
   }
 
   try {

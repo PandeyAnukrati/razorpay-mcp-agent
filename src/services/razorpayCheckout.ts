@@ -4,6 +4,8 @@
  * When payment completes, automatically posts the verified webhook to /api/webhooks/razorpay.
  */
 
+import { getRazorpayCredentials } from "./mcpClient"
+
 export function openRazorpayCheckout({
   orderId = "order_TXGPnb2izSqLLF",
   amount = 1499,
@@ -25,7 +27,8 @@ export function openRazorpayCheckout({
   onSuccess?: (response: any) => void
   onFailure?: (error: any) => void
 } = {}) {
-  const keyId = import.meta.env.VITE_RAZORPAY_KEY_ID || "rzp_test_TXGOvB8QfR3rW2"
+  const credentials = getRazorpayCredentials()
+  const keyId = credentials.keyId || import.meta.env.VITE_RAZORPAY_KEY_ID || ""
   const amountInPaise = Math.round(amount * 100)
 
   const options: any = {

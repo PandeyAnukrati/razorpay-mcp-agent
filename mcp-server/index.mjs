@@ -6,8 +6,8 @@ import "dotenv/config"
 import Razorpay from "razorpay"
 
 // 1. Initialize Razorpay Client with Environment Credentials
-const KEY_ID = process.env.RAZORPAY_KEY_ID || "rzp_test_TXGOvB8QfR3rW2"
-const KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || "B17NfXAZpBZ8o9f1Lt6VrQmK"
+const KEY_ID = process.env.RAZORPAY_KEY_ID || ""
+const KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || ""
 
 const hasValidKeys = Boolean(
   KEY_ID &&

@@ -21,10 +21,9 @@ export type ChatMessage = {
   isUser: boolean
 }
 
-// User-provided API key from .env / prompt
-const PRIMARY_GEMINI_KEY =
-  import.meta.env.VITE_GEMINI_API_KEY || "AIzaSyCnZP7ty2Y0e77HcM7KW7j0o6R8Qukdv1I"
-const FALLBACK_GEMINI_KEY = "AIzaSyAtkF3Otrj9rmmcYaAlp3YUd_qf923da9Q"
+// User-provided API key from .env
+const PRIMARY_GEMINI_KEY = (import.meta.env.VITE_GEMINI_API_KEY || "").trim()
+const FALLBACK_GEMINI_KEY = ""
 const MODEL_NAME = "gemini-2.5-flash"
 const BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 
@@ -216,13 +215,16 @@ async function postToGemini(body: any, apiKey: string) {
  * Calls Google Gemini API with fallback resilience across configured API keys.
  */
 async function callGeminiWithFallback(body: any): Promise<any> {
-  let activeKey = PRIMARY_GEMINI_KEY
+  let activeKey = PRIMARY_GEMINI_KEY || FALLBACK_GEMINI_KEY
+  if (!activeKey) {
+    throw new Error("No Gemini API key configured. Please set VITE_GEMINI_API_KEY in your .env file.")
+  }
   let res = await postToGemini(body, activeKey)
 
   if (!res.ok) {
     const errText = await res.text()
-    // If the user-provided key is invalid or unauthorized, fail over to fallback key
-    if (res.status === 400 || res.status === 403 || errText.includes("API_KEY_INVALID")) {
+    // If the user-provided key is invalid or unauthorized, fail over to fallback key if configured
+    if ((res.status === 400 || res.status === 403 || errText.includes("API_KEY_INVALID")) && FALLBACK_GEMINI_KEY) {
       console.warn(
         `Primary Gemini API key rejected (${res.status}). Switching to backup key...`
       )

@@ -14,8 +14,8 @@ export interface RazorpayCredentials {
 const STORAGE_KEY_ID = "rzp_client_key_id"
 const STORAGE_KEY_SECRET = "rzp_client_key_secret"
 
-export const DEFAULT_RAZORPAY_KEY_ID = "rzp_test_TXGOvB8QfR3rW2"
-export const DEFAULT_RAZORPAY_KEY_SECRET = "B17NfXAZpBZ8o9f1Lt6VrQmK"
+export const DEFAULT_RAZORPAY_KEY_ID = ""
+export const DEFAULT_RAZORPAY_KEY_SECRET = ""
 
 /**
  * Get active Razorpay credentials from localStorage, Vite environment variables, or preconfigured defaults
