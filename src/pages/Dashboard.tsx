@@ -34,8 +34,10 @@ import {
   ShieldCheck,
   RefreshCw,
   Zap,
+  Building2,
 } from "lucide-react"
 import { WebhookAutomationPage } from "@/components/WebhookAutomationPage"
+import { MerchantPortal } from "@/components/MerchantPortal"
 import { getWebhookEvents } from "@/services/webhookAutomation"
 import {
   getRazorpayCredentials,
@@ -93,13 +95,25 @@ function readFileAsText(file: File): Promise<string> {
 export function Dashboard() {
   const navigate = useNavigate()
   const [user, setUser] = useState<any>(() => auth.currentUser)
-  const [currentView, setCurrentView] = useState<"menu" | "chat" | "sessions-list" | "webhooks">(() => {
+  const [currentView, setCurrentView] = useState<"menu" | "chat" | "sessions-list" | "webhooks" | "merchant">(() => {
     return (safeStorageGet("rzp_current_view", "menu") as any)
   })
   const [backView, setBackView] = useState<"menu" | "sessions-list">(() => {
     const saved = safeStorageGet("rzp_back_view", "menu")
     return saved === "sessions-list" ? "sessions-list" : "menu"
   })
+
+  // Super Merchant State & Seeded Access
+  const [isMerchantLoggedIn, setIsMerchantLoggedIn] = useState<boolean>(() => {
+    return safeStorageGet("rzp_merchant_logged_in", "false") === "true"
+  })
+  const [merchantEmail, setMerchantEmail] = useState<string>(() => {
+    return safeStorageGet("rzp_merchant_email", "merchant@razorpay.com")
+  })
+  const [isMerchantModalOpen, setIsMerchantModalOpen] = useState<boolean>(false)
+  const [loginEmailInput, setLoginEmailInput] = useState<string>("merchant@razorpay.com")
+  const [loginPasswordInput, setLoginPasswordInput] = useState<string>("SuperMerchant2026!")
+  const [loginError, setLoginError] = useState<string>("")
   const [activeSessionId, setActiveSessionId] = useState<string>(() => {
     return safeStorageGet("rzp_active_session_id", "") || "CHAT-MCP-01"
   })
@@ -522,7 +536,46 @@ export function Dashboard() {
     }
   }
 
+  const handleOpenMerchantPortal = () => {
+    if (isMerchantLoggedIn) {
+      setCurrentView("merchant")
+    } else {
+      setIsMerchantModalOpen(true)
+    }
+  }
+
+  const handleQuickSuperMerchantLogin = () => {
+    setIsMerchantLoggedIn(true)
+    setMerchantEmail("merchant@razorpay.com")
+    safeStorageSet("rzp_merchant_logged_in", "true")
+    safeStorageSet("rzp_merchant_email", "merchant@razorpay.com")
+    setIsMerchantModalOpen(false)
+    setLoginError("")
+    setCurrentView("merchant")
+  }
+
+  const handleMerchantFormSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!loginEmailInput.trim() || !loginPasswordInput.trim()) {
+      setLoginError("Please enter your merchant credentials.")
+      return
+    }
+    setIsMerchantLoggedIn(true)
+    setMerchantEmail(loginEmailInput.trim())
+    safeStorageSet("rzp_merchant_logged_in", "true")
+    safeStorageSet("rzp_merchant_email", loginEmailInput.trim())
+    setIsMerchantModalOpen(false)
+    setLoginError("")
+    setCurrentView("merchant")
+  }
+
   const handleGoBack = () => {
+    if (currentView === "merchant") {
+      setCurrentView("chat")
+      setBackView("menu")
+      return
+    }
+
     if (currentView === "chat") {
       if (backView === "sessions-list") {
         setCurrentView("sessions-list")
@@ -968,6 +1021,28 @@ export function Dashboard() {
               <span className="md:hidden">Webhooks</span>
             </Button>
 
+            {/* Super Merchant Portal Button */}
+            <Button
+              variant="outline"
+              onClick={handleOpenMerchantPortal}
+              className={`h-9 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all duration-200 ${
+                currentView === "merchant"
+                  ? "border-amber-500 bg-amber-500 text-white shadow-md shadow-amber-500/20"
+                  : isMerchantLoggedIn
+                  ? "border-amber-500/50 bg-amber-500/15 hover:bg-amber-500/25 text-amber-500 dark:text-amber-300 shadow-sm"
+                  : "border-slate-700/80 bg-slate-800/40 hover:bg-slate-800 text-slate-200 hover:border-amber-500/40"
+              }`}
+            >
+              <Building2 className="h-3.5 w-3.5 text-amber-400" />
+              <span className="hidden lg:inline">
+                {isMerchantLoggedIn ? "👑 Super Merchant Portal" : "👑 Merchant Login"}
+              </span>
+              <span className="lg:hidden">Merchant</span>
+              {isMerchantLoggedIn && (
+                <span className="h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
+              )}
+            </Button>
+
             <Button
               variant="outline"
               onClick={handleSignOut}
@@ -1329,6 +1404,14 @@ export function Dashboard() {
       {/* 2.4 WEBHOOK AUTOMATION FULL PAGE */}
       {currentView === "webhooks" && (
         <WebhookAutomationPage onSendToChat={handleSendAutomationAlert} />
+      )}
+
+      {/* 2.5 SUPER MERCHANT PORTAL FULL VIEW */}
+      {currentView === "merchant" && (
+        <MerchantPortal
+          onBackToChat={() => setCurrentView("chat")}
+          merchantEmail={merchantEmail}
+        />
       )}
 
       {/* 3. LIVE RAZORPAY MCP EXPLORER MODAL */}
@@ -1708,6 +1791,138 @@ export function Dashboard() {
                 </div>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* 5. SUPER MERCHANT LOGIN MODAL */}
+      {isMerchantModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fade">
+          <div className="bg-[#0f1422] border border-slate-700/80 rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden text-slate-100 animate-in zoom-in-95">
+            {/* Modal Header */}
+            <div className="border-b border-slate-800/90 px-6 py-5 flex items-center justify-between bg-slate-900/60">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-400">
+                  <Building2 className="h-6 w-6" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-bold text-white">Super Merchant Portal</h3>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                      Enterprise Tier
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Authorize high-value refunds, review AI evidence dossiers & inspect customer CRM.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setIsMerchantModalOpen(false)
+                  setLoginError("")
+                }}
+                className="h-8 w-8 rounded-full border border-slate-700 bg-slate-800/80 flex items-center justify-center text-slate-400 hover:text-white transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 space-y-5">
+              {/* Seeded Super Merchant Credentials Callout */}
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-indigo-500/10 to-slate-900 border border-amber-500/30 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                    👑 Seeded Super Merchant Credentials
+                  </span>
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500/20 text-amber-200 font-mono">
+                    Pre-configured
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-xs font-mono bg-slate-950/70 p-2.5 rounded-xl border border-slate-800">
+                  <div>
+                    <span className="text-slate-500 text-[10px] block">Email:</span>
+                    <strong className="text-slate-200">merchant@razorpay.com</strong>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 text-[10px] block">Password:</span>
+                    <strong className="text-slate-200">SuperMerchant2026!</strong>
+                  </div>
+                </div>
+
+                {/* 1-Click Quick Login Button */}
+                <Button
+                  type="button"
+                  onClick={handleQuickSuperMerchantLogin}
+                  className="w-full h-10 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs shadow-lg shadow-amber-500/20 gap-2 mt-1"
+                >
+                  <Zap className="w-4 h-4 text-slate-950 fill-current" />
+                  ⚡ 1-Click Quick-Login as Super Merchant
+                </Button>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="flex-1 h-px bg-slate-800" />
+                <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">or sign in manually</span>
+                <div className="flex-1 h-px bg-slate-800" />
+              </div>
+
+              {loginError && (
+                <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-xs text-rose-300">
+                  {loginError}
+                </div>
+              )}
+
+              {/* Manual Login Form */}
+              <form onSubmit={handleMerchantFormSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                    Merchant Email
+                  </label>
+                  <input
+                    type="email"
+                    value={loginEmailInput}
+                    onChange={(e) => setLoginEmailInput(e.target.value)}
+                    className="w-full h-10 rounded-xl border border-slate-700 bg-slate-950 px-4 text-xs text-white focus:outline-none focus:border-amber-400"
+                    placeholder="merchant@razorpay.com"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                    Password
+                  </label>
+                  <input
+                    type="password"
+                    value={loginPasswordInput}
+                    onChange={(e) => setLoginPasswordInput(e.target.value)}
+                    className="w-full h-10 rounded-xl border border-slate-700 bg-slate-950 px-4 text-xs text-white focus:outline-none focus:border-amber-400"
+                    placeholder="••••••••••••"
+                  />
+                </div>
+
+                <div className="pt-2 flex items-center justify-end gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setIsMerchantModalOpen(false)
+                      setLoginError("")
+                    }}
+                    className="border-slate-700 bg-slate-800 text-slate-300 text-xs h-9 px-4"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs h-9 px-5"
+                  >
+                    Enter Merchant Portal →
+                  </Button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
       )}

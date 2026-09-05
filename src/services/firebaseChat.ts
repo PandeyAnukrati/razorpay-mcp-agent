@@ -170,6 +170,99 @@ export function getLocalSessions(uid?: string): ChatSession[] {
   return []
 }
 
+/**
+ * Loads all chat sessions across all local stores for Merchant Portal ticket monitoring.
+ */
+export async function getAllChatSessions(): Promise<ChatSession[]> {
+  const idbSessions = await idbGetSessions().catch(() => [])
+  const localSessions = getLocalSessions()
+  const map = new Map<string, ChatSession>()
+
+  for (const s of [...idbSessions, ...localSessions]) {
+    if (s && s.id && !map.has(s.id)) {
+      map.set(s.id, s)
+    }
+  }
+
+  // If no sessions, return seeded demo tickets for initial merchant inspection
+  if (map.size === 0) {
+    const demoTickets: ChatSession[] = [
+      {
+        id: "TICK-901",
+        uid: "user_rohit",
+        subject: "UPI Double Debit on Order #9401",
+        status: "Open",
+        priority: "High",
+        date: "Today, 15:30",
+        messages: [
+          {
+            id: "m1",
+            text: "Hi, I paid ₹2,499 via Google Pay UPI. Amount got debited twice from my HDFC bank account but order showed pending.",
+            isUser: true,
+            timestamp: "15:30",
+          },
+          {
+            id: "m2",
+            text: "Autonomous AI checked payment pay_TYLbzTtDsBE2o0. One payment captured, the duplicate was auto-reversed by bank. RRN is 392019481029.",
+            isUser: false,
+            timestamp: "15:31",
+          },
+        ],
+        files: [],
+      },
+      {
+        id: "TICK-902",
+        uid: "user_priya",
+        subject: "Defective Laptop Screen Replacement & Refund",
+        status: "In Review",
+        priority: "High",
+        date: "Yesterday",
+        messages: [
+          {
+            id: "m1",
+            text: "Requesting full refund for order_TYLbFFXmszuIQa. The display is cracked upon delivery.",
+            isUser: true,
+            timestamp: "Yesterday",
+          },
+          {
+            id: "m2",
+            text: "Claim REF-CLAIM-8392 registered and escalated to Super Merchant Portal for review.",
+            isUser: false,
+            timestamp: "Yesterday",
+          },
+        ],
+        files: [],
+      },
+      {
+        id: "TICK-903",
+        uid: "user_vikram",
+        subject: "Webhook signature verification inquiry",
+        status: "Resolved",
+        priority: "Low",
+        date: "2 days ago",
+        messages: [
+          {
+            id: "m1",
+            text: "What hash algorithm does Razorpay use for X-Razorpay-Signature?",
+            isUser: true,
+            timestamp: "2 days ago",
+          },
+          {
+            id: "m2",
+            text: "Razorpay webhooks use HMAC SHA256 hex digest using your merchant webhook secret.",
+            isUser: false,
+            timestamp: "2 days ago",
+          },
+        ],
+        files: [],
+      },
+    ]
+    return demoTickets
+  }
+
+  return Array.from(map.values())
+}
+
 export function saveLocalSession(uid: string, session: ChatSession): void {
   if (typeof window === "undefined" || !session) return
 

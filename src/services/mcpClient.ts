@@ -437,6 +437,59 @@ export async function mcpGetRefunds(paymentId?: string): Promise<any> {
 }
 
 /**
+ * MCP Tool: create_refund
+ * Issues a refund for a payment directly on Razorpay API.
+ */
+export async function mcpCreateRefund(params: {
+  payment_id: string
+  amount?: number
+  notes?: Record<string, string>
+  speed?: "normal" | "optimum"
+}): Promise<any> {
+  const cleanPaymentId = params.payment_id.trim()
+  try {
+    const creds = requireCredentials()
+    const payload: any = {
+      speed: params.speed || "optimum",
+      notes: params.notes || { reason: "Refund processed via Razorpay MCP Agent" },
+    }
+    if (params.amount && params.amount > 0) {
+      payload.amount = Math.round(params.amount * 100)
+    }
+
+    const res = await fetch(`${RAZORPAY_BASE_URL}/payments/${cleanPaymentId}/refund`, {
+      method: "POST",
+      headers: {
+        ...getBasicAuthHeaders(creds.keyId, creds.keySecret),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    })
+
+    const data = await res.json()
+    if (!res.ok) {
+      return {
+        error: data.error?.description || `Failed to process refund for payment '${cleanPaymentId}'.`,
+      }
+    }
+
+    return {
+      source: "razorpay_live_api",
+      id: data.id,
+      payment_id: data.payment_id,
+      amount_formatted: formatINR(data.amount),
+      currency: data.currency,
+      status: data.status || "processed",
+      speed: data.speed_processed || data.speed_requested || "instant",
+      created_at: new Date(data.created_at * 1000).toLocaleString(),
+      notes: data.notes,
+    }
+  } catch (err: any) {
+    return { error: err.message || "Failed to process refund on Razorpay." }
+  }
+}
+
+/**
  * MCP Tool: get_settlements
  */
 export async function mcpGetSettlements(): Promise<any> {
