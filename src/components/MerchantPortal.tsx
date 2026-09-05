@@ -1282,9 +1282,50 @@ export function MerchantPortal({ onSignOut, merchantEmail = "" }: MerchantPortal
                 </div>
                 <div>
                   <span className="text-slate-400 text-[11px]">Status:</span>
-                  <div className="font-medium text-amber-700">{selectedClaim.status}</div>
+                  <div
+                    className={`font-semibold ${
+                      selectedClaim.status === "Approved & Refunded"
+                        ? "text-emerald-700"
+                        : selectedClaim.status === "Rejected"
+                        ? "text-rose-700"
+                        : selectedClaim.status === "Additional Evidence Requested"
+                        ? "text-purple-700"
+                        : "text-amber-700"
+                    }`}
+                  >
+                    {selectedClaim.status}
+                  </div>
                 </div>
               </div>
+
+              {selectedClaim.vendorDecision && (
+                <div className="p-3.5 bg-emerald-50/80 border border-emerald-200 rounded-xl space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-xs text-emerald-900 flex items-center gap-1.5">
+                      <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                      Vendor Authorization Decision:
+                    </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-semibold uppercase">
+                      {selectedClaim.vendorDecision.action}
+                    </span>
+                  </div>
+                  <div className="text-xs text-emerald-800 space-y-1">
+                    <div>
+                      <strong>Decided At:</strong> {selectedClaim.vendorDecision.timestamp}
+                    </div>
+                    {selectedClaim.vendorDecision.refundId && (
+                      <div className="font-mono">
+                        <strong>Refund ID:</strong> {selectedClaim.vendorDecision.refundId}
+                      </div>
+                    )}
+                    {selectedClaim.vendorDecision.vendorNotes && (
+                      <div className="text-slate-700 bg-white/80 p-2 rounded border border-emerald-100 italic">
+                        "{selectedClaim.vendorDecision.vendorNotes}"
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               <div>
                 <h4 className="font-semibold text-slate-800 mb-1">Customer Reason:</h4>

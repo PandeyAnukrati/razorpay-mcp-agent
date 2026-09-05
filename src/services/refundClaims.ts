@@ -14,6 +14,8 @@ import {
 import {
   getAllChatSessions,
   saveSessionToFirebase,
+  idbSaveSession,
+  saveLocalSession,
   type Message,
 } from "./firebaseChat"
 
@@ -82,8 +84,96 @@ function hashString(str: string): number {
   return Math.abs(hash)
 }
 
+/**
+ * Persistently stores a vendor decision into dedicated localStorage keys
+ * (by claimId, lowercase claimId, numeric digits, and paymentId).
+ * These small keys (~100 bytes) never fail due to quota limits and persist across reloads.
+ */
+export function saveClaimDecision(
+  claimId: string,
+  paymentId: string | undefined,
+  decision?: RefundClaim["vendorDecision"]
+): void {
+  if (typeof localStorage === "undefined" || !decision || !decision.action) return
+  try {
+    const json = JSON.stringify(decision)
+    localStorage.setItem(`rzp_claim_decision_${claimId}`, json)
+    localStorage.setItem(`rzp_claim_decision_${claimId.toLowerCase()}`, json)
+    const digits = claimId.replace(/[^0-9]/g, "")
+    if (digits) {
+      localStorage.setItem(`rzp_claim_decision_${digits}`, json)
+    }
+    if (paymentId) {
+      localStorage.setItem(`rzp_claim_decision_${paymentId.toLowerCase()}`, json)
+    }
+  } catch (e) {
+    console.warn("Could not save claim decision to localStorage:", e)
+  }
+}
+
+/**
+ * Retrieves a vendor decision from dedicated localStorage keys.
+ */
+export function getSavedClaimDecision(
+  claimId?: string,
+  paymentId?: string
+): NonNullable<RefundClaim["vendorDecision"]> | null {
+  if (typeof localStorage === "undefined") return null
+  try {
+    if (claimId) {
+      const raw = localStorage.getItem(`rzp_claim_decision_${claimId}`)
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        if (parsed && parsed.action) return parsed
+      }
+      const rawLower = localStorage.getItem(`rzp_claim_decision_${claimId.toLowerCase()}`)
+      if (rawLower) {
+        const parsed = JSON.parse(rawLower)
+        if (parsed && parsed.action) return parsed
+      }
+      const digits = claimId.replace(/[^0-9]/g, "")
+      if (digits) {
+        const rawDigits = localStorage.getItem(`rzp_claim_decision_${digits}`)
+        if (rawDigits) {
+          const parsed = JSON.parse(rawDigits)
+          if (parsed && parsed.action) return parsed
+        }
+      }
+    }
+    if (paymentId) {
+      const rawPay = localStorage.getItem(`rzp_claim_decision_${paymentId.toLowerCase()}`)
+      if (rawPay) {
+        const parsed = JSON.parse(rawPay)
+        if (parsed && parsed.action) return parsed
+      }
+    }
+  } catch {}
+  return null
+}
+
 export function parseClaimFromSession(session: any): RefundClaim | null {
-  if (!session || !Array.isArray(session.messages)) return null
+  if (!session) return null
+
+  // 1. If the session already carries a structured refundClaim, reuse and re-verify its decision
+  if (session.refundClaim && session.refundClaim.claimId) {
+    const existing = { ...session.refundClaim }
+    const savedDec =
+      getSavedClaimDecision(existing.claimId, existing.paymentId) ||
+      session.claimDecision
+    if (savedDec && savedDec.action) {
+      existing.vendorDecision = savedDec
+      existing.status =
+        savedDec.action === "approve"
+          ? "Approved & Refunded"
+          : savedDec.action === "reject"
+          ? "Rejected"
+          : "Additional Evidence Requested"
+    }
+    inMemoryClaimsCache.set(existing.claimId, existing)
+    return existing
+  }
+
+  if (!Array.isArray(session.messages)) return null
 
   // Check if any agent message or full conversation escalated a refund claim
   const allText = session.messages.map((m: any) => m?.text || "").join(" ")
@@ -123,6 +213,86 @@ export function parseClaimFromSession(session: any): RefundClaim | null {
     ? claimIdMatch[0]
     : `REF-CLAIM-${hashString(session.id || paymentId).toString().slice(0, 4)}`
 
+  // Recover persistent settlement decision from all possible layers
+  let status: RefundClaim["status"] = "Pending Vendor Decision"
+  let vendorDecision: RefundClaim["vendorDecision"] = undefined
+
+  // Layer 1: Dedicated per-claim decision key in localStorage
+  const savedDec = getSavedClaimDecision(claimId, paymentId)
+  if (savedDec) {
+    vendorDecision = savedDec
+    status =
+      savedDec.action === "approve"
+        ? "Approved & Refunded"
+        : savedDec.action === "reject"
+        ? "Rejected"
+        : "Additional Evidence Requested"
+  }
+
+  // Layer 2: Check session.claimDecision
+  if (!vendorDecision && session.claimDecision && session.claimDecision.action) {
+    vendorDecision = session.claimDecision
+    status =
+      session.claimDecision.action === "approve"
+        ? "Approved & Refunded"
+        : session.claimDecision.action === "reject"
+        ? "Rejected"
+        : "Additional Evidence Requested"
+    saveClaimDecision(claimId, paymentId, vendorDecision)
+  }
+
+  // Layer 3: Check conversation transcript for official settlement confirmation messages
+  if (!vendorDecision) {
+    const isApprovedInChat =
+      allText.includes("Merchant Authorization Approved") ||
+      allText.includes("Refund Issued!") ||
+      allText.includes("Instant Merchant Settlement") ||
+      (allText.includes("Approved") && allText.includes("refund.processed"))
+
+    const isRejectedInChat =
+      allText.includes("Claim Declined") || allText.includes("Claim Rejected")
+
+    const isInfoRequestedInChat =
+      allText.includes("Additional Information Required") || allText.includes("Evidence Requested")
+
+    if (isApprovedInChat) {
+      status = "Approved & Refunded"
+      const rfndMatch = allText.match(/rfnd_[a-zA-Z0-9_]+/)
+      vendorDecision = {
+        action: "approve",
+        timestamp: new Date().toLocaleString(),
+        refundId: rfndMatch ? rfndMatch[0] : `rfnd_instant`,
+        vendorNotes: "Approved via Merchant Escalation Desk",
+      }
+      saveClaimDecision(claimId, paymentId, vendorDecision)
+    } else if (isRejectedInChat) {
+      status = "Rejected"
+      vendorDecision = {
+        action: "reject",
+        timestamp: new Date().toLocaleString(),
+        vendorNotes: "Claim does not satisfy merchant return criteria.",
+      }
+      saveClaimDecision(claimId, paymentId, vendorDecision)
+    } else if (isInfoRequestedInChat) {
+      status = "Additional Evidence Requested"
+      vendorDecision = {
+        action: "request_info",
+        timestamp: new Date().toLocaleString(),
+        vendorNotes: "Additional evidence requested by merchant.",
+      }
+      saveClaimDecision(claimId, paymentId, vendorDecision)
+    }
+  }
+
+  // Layer 4: Check active in-memory cache
+  if (!vendorDecision) {
+    const cached = inMemoryClaimsCache.get(claimId)
+    if (cached && cached.vendorDecision) {
+      vendorDecision = cached.vendorDecision
+      status = cached.status
+    }
+  }
+
   // Extract Validity Score
   let validityScore = 92
   const scoreMatch = allText.match(/(\d{1,3})%\s*\(?(?:High|Validity)/i)
@@ -133,7 +303,7 @@ export function parseClaimFromSession(session: any): RefundClaim | null {
   // Extract Risk Level
   const riskLevel = allText.includes("Low Risk") ? "Low" : allText.includes("High Risk") ? "High" : "Medium"
 
-  // Extract Customer Reason: look for user message mentioning refund/issue, or fallback to first user message
+  // Extract Customer Reason
   const userMessages = session.messages.filter((m: any) => m.isUser && m.text)
   const refundMsg = userMessages.find((m: any) =>
     /refund|return|damaged|broken|money back|cancel|wrong|defective/i.test(m.text)
@@ -163,7 +333,8 @@ export function parseClaimFromSession(session: any): RefundClaim | null {
     customerEmail: session.uid?.includes("@") ? session.uid : "customer@example.com",
     reason,
     attachedDocs,
-    status: "Pending Vendor Decision",
+    status,
+    vendorDecision,
     aiInvestigation: {
       validityScore,
       riskLevel: riskLevel as "Low" | "Medium" | "High",
@@ -194,13 +365,43 @@ export function syncClaimsFromSessions(sessions: any[]): RefundClaim[] {
   for (const session of sessions) {
     const claim = parseClaimFromSession(session)
     if (claim) {
-      inMemoryClaimsCache.set(claim.claimId, claim)
       const idx = updated.findIndex(
-        (c) => c.claimId === claim.claimId || c.claimId.toLowerCase() === claim.claimId.toLowerCase()
+        (c) =>
+          c.claimId === claim.claimId ||
+          c.claimId.toLowerCase() === claim.claimId.toLowerCase() ||
+          (c.paymentId && claim.paymentId && c.paymentId.toLowerCase() === claim.paymentId.toLowerCase())
       )
+
       if (idx === -1) {
         updated.unshift(claim)
+        inMemoryClaimsCache.set(claim.claimId, claim)
         hasNew = true
+      } else {
+        // Find whichever decision is available:
+        const savedDec =
+          getSavedClaimDecision(updated[idx].claimId, updated[idx].paymentId) ||
+          getSavedClaimDecision(claim.claimId, claim.paymentId)
+
+        const effectiveDecision =
+          savedDec || updated[idx].vendorDecision || claim.vendorDecision
+
+        if (effectiveDecision) {
+          const effectiveStatus =
+            effectiveDecision.action === "approve"
+              ? "Approved & Refunded"
+              : effectiveDecision.action === "reject"
+              ? "Rejected"
+              : "Additional Evidence Requested"
+
+          updated[idx] = {
+            ...updated[idx],
+            status: effectiveStatus,
+            vendorDecision: effectiveDecision,
+            updatedAt: updated[idx].updatedAt || claim.updatedAt || new Date().toLocaleString(),
+          }
+          inMemoryClaimsCache.set(updated[idx].claimId, updated[idx])
+          hasNew = true
+        }
       }
     }
   }
@@ -258,21 +459,51 @@ export function getRefundClaims(): RefundClaim[] {
       }
     }
 
-    // Automatically recover and merge any claims discussed / escalated in chat sessions
+    // 1. Recover single claim snapshots stored in dedicated keys
+    try {
+      const singleClaimKeys = Object.keys(localStorage).filter(
+        (k) => k.startsWith("rzp_claim_") && !k.startsWith("rzp_claim_decision_")
+      )
+      for (const k of singleClaimKeys) {
+        const rawSingle = localStorage.getItem(k)
+        if (rawSingle) {
+          const parsed = JSON.parse(rawSingle)
+          if (parsed && parsed.claimId && !MOCK_CLAIM_IDS.has(parsed.claimId)) {
+            const exists = realClaims.some(
+              (c) =>
+                c.claimId === parsed.claimId ||
+                c.claimId.toLowerCase() === parsed.claimId.toLowerCase() ||
+                (c.paymentId && parsed.paymentId && c.paymentId.toLowerCase() === parsed.paymentId.toLowerCase())
+            )
+            if (!exists) {
+              realClaims.unshift(parsed)
+            }
+          }
+        }
+      }
+    } catch {}
+
+    // 2. Automatically recover and merge any claims discussed / escalated in chat sessions
     const fromSessions = recoverClaimsFromChatSessions()
     for (const rec of fromSessions) {
       const exists = realClaims.some(
-        (c) => c.claimId === rec.claimId || c.claimId.toLowerCase() === rec.claimId.toLowerCase()
+        (c) =>
+          c.claimId === rec.claimId ||
+          c.claimId.toLowerCase() === rec.claimId.toLowerCase() ||
+          (c.paymentId && rec.paymentId && c.paymentId.toLowerCase() === rec.paymentId.toLowerCase())
       )
       if (!exists) {
         realClaims.unshift(rec)
       }
     }
 
-    // Merge with in-memory claims cache
+    // 3. Merge with in-memory claims cache
     for (const [id, memClaim] of inMemoryClaimsCache.entries()) {
       const idx = realClaims.findIndex(
-        (c) => c.claimId === id || c.claimId.toLowerCase() === id.toLowerCase()
+        (c) =>
+          c.claimId === id ||
+          c.claimId.toLowerCase() === id.toLowerCase() ||
+          (c.paymentId && memClaim.paymentId && c.paymentId.toLowerCase() === memClaim.paymentId.toLowerCase())
       )
       if (idx === -1) {
         realClaims.unshift(memClaim)
@@ -280,6 +511,24 @@ export function getRefundClaims(): RefundClaim[] {
         // If memory has a recorded decision, preserve it
         if (memClaim.vendorDecision && !realClaims[idx].vendorDecision) {
           realClaims[idx] = memClaim
+        }
+      }
+    }
+
+    // 4. Guaranteed Hydration: Apply dedicated saved decisions to EVERY claim
+    for (let i = 0; i < realClaims.length; i++) {
+      const c = realClaims[i]
+      const savedDec = getSavedClaimDecision(c.claimId, c.paymentId)
+      if (savedDec) {
+        realClaims[i] = {
+          ...c,
+          vendorDecision: savedDec,
+          status:
+            savedDec.action === "approve"
+              ? "Approved & Refunded"
+              : savedDec.action === "reject"
+              ? "Rejected"
+              : "Additional Evidence Requested",
         }
       }
     }
@@ -300,9 +549,27 @@ export function saveRefundClaim(claim: RefundClaim): void {
     // 1. Immediately store in memory cache
     inMemoryClaimsCache.set(claim.claimId, claim)
 
-    // 2. Persist to localStorage safely without bloated evidence data
+    // 2. Persist decision to dedicated quota-free keys
+    if (claim.vendorDecision) {
+      saveClaimDecision(claim.claimId, claim.paymentId, claim.vendorDecision)
+    }
+
+    // 3. Persist single-claim snapshot
+    try {
+      localStorage.setItem(`rzp_claim_${claim.claimId}`, JSON.stringify(claim))
+      if (claim.paymentId) {
+        localStorage.setItem(`rzp_claim_${claim.paymentId.toLowerCase()}`, JSON.stringify(claim))
+      }
+    } catch {}
+
+    // 4. Persist to main array in localStorage safely without bloated evidence data
     const existing = getRefundClaims()
-    const idx = existing.findIndex((c) => c.claimId === claim.claimId)
+    const idx = existing.findIndex(
+      (c) =>
+        c.claimId === claim.claimId ||
+        c.claimId.toLowerCase() === claim.claimId.toLowerCase() ||
+        (c.paymentId && claim.paymentId && c.paymentId.toLowerCase() === claim.paymentId.toLowerCase())
+    )
     const sanitizedClaim: RefundClaim = {
       ...claim,
       attachedDocs: (claim.attachedDocs || []).map((d) => ({
@@ -312,11 +579,12 @@ export function saveRefundClaim(claim: RefundClaim): void {
         previewUrl: d.previewUrl && d.previewUrl.startsWith("http") ? d.previewUrl : undefined,
       })),
     }
-    const updated = idx >= 0 ? existing.map((c, i) => (i === idx ? sanitizedClaim : c)) : [sanitizedClaim, ...existing]
+    const updated =
+      idx >= 0 ? existing.map((c, i) => (i === idx ? sanitizedClaim : c)) : [sanitizedClaim, ...existing]
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(updated))
     } catch (storageErr) {
-      console.warn("LocalStorage quota full, preserved in-memory cache:", storageErr)
+      console.warn("LocalStorage quota full, preserved in-memory cache and dedicated key:", storageErr)
     }
     window.dispatchEvent(new CustomEvent("refund_claim_updated", { detail: claim }))
   } catch (err) {
@@ -519,7 +787,7 @@ export async function settleRefundClaim(
       resolutionMsg = "Settled and authorized by Merchant Officer."
     }
 
-    // 2. Update claim status
+    // 2. Update claim status and persist decision permanently
     claim.status = "Approved & Refunded"
     claim.vendorDecision = {
       action: "approve",
@@ -528,6 +796,7 @@ export async function settleRefundClaim(
       refundId,
     }
     claim.updatedAt = new Date().toLocaleString()
+    saveClaimDecision(claim.claimId, claim.paymentId, claim.vendorDecision)
     saveRefundClaim(claim)
 
     // 3. Post webhook to receiver so simulator and feeds receive confirmation
@@ -567,7 +836,7 @@ export async function settleRefundClaim(
       })
     } catch {}
 
-    // 4. Update the customer's chat session in IndexedDB and Firebase!
+    // 4. Update the customer's chat session in IndexedDB, LocalStorage and Firebase!
     try {
       const allSessions = await getAllChatSessions()
       const targetSession = allSessions.find(
@@ -584,7 +853,11 @@ export async function settleRefundClaim(
         }
         targetSession.messages.push(resolutionNote)
         targetSession.status = "Resolved"
-        await saveSessionToFirebase(targetSession.uid, targetSession)
+        ;(targetSession as any).refundClaim = { ...claim }
+        ;(targetSession as any).claimDecision = { ...claim.vendorDecision }
+        saveLocalSession(targetSession.uid || "guest_user", targetSession)
+        await idbSaveSession(targetSession).catch(() => {})
+        await saveSessionToFirebase(targetSession.uid, targetSession).catch(() => {})
       }
     } catch (err) {
       console.warn("Could not sync settlement note to customer chat session:", err)
@@ -605,6 +878,7 @@ export async function settleRefundClaim(
       vendorNotes: vendorNotes || "Claim does not satisfy merchant return criteria.",
     }
     claim.updatedAt = new Date().toLocaleString()
+    saveClaimDecision(claim.claimId, claim.paymentId, claim.vendorDecision)
     saveRefundClaim(claim)
 
     // Notify customer chat session
@@ -623,7 +897,11 @@ export async function settleRefundClaim(
           timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         }
         targetSession.messages.push(rejectionNote)
-        await saveSessionToFirebase(targetSession.uid, targetSession)
+        ;(targetSession as any).refundClaim = { ...claim }
+        ;(targetSession as any).claimDecision = { ...claim.vendorDecision }
+        saveLocalSession(targetSession.uid || "guest_user", targetSession)
+        await idbSaveSession(targetSession).catch(() => {})
+        await saveSessionToFirebase(targetSession.uid, targetSession).catch(() => {})
       }
     } catch {}
 
@@ -636,6 +914,7 @@ export async function settleRefundClaim(
       vendorNotes: vendorNotes || "Please provide unboxing video or invoice receipt.",
     }
     claim.updatedAt = new Date().toLocaleString()
+    saveClaimDecision(claim.claimId, claim.paymentId, claim.vendorDecision)
     saveRefundClaim(claim)
 
     // Notify customer chat session
@@ -654,10 +933,15 @@ export async function settleRefundClaim(
           timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         }
         targetSession.messages.push(infoNote)
-        await saveSessionToFirebase(targetSession.uid, targetSession)
+        ;(targetSession as any).refundClaim = { ...claim }
+        ;(targetSession as any).claimDecision = { ...claim.vendorDecision }
+        saveLocalSession(targetSession.uid || "guest_user", targetSession)
+        await idbSaveSession(targetSession).catch(() => {})
+        await saveSessionToFirebase(targetSession.uid, targetSession).catch(() => {})
       }
     } catch {}
 
     return { success: true }
   }
 }
+
