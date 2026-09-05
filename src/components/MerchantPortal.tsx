@@ -518,19 +518,19 @@ export function MerchantPortal({ onSignOut, merchantEmail = "" }: MerchantPortal
                   <Filter className="w-3.5 h-3.5" /> Filter:
                 </span>
                 {[
-                  { id: "all", label: "All Claims" },
-                  { id: "pending", label: "Pending Decision" },
-                  { id: "approved", label: "Approved" },
-                  { id: "rejected", label: "Rejected" },
-                  { id: "info", label: "Evidence Needed" },
+                  { id: "all", label: "All Claims", activeClass: "bg-blue-50 text-[#305EFF] border-blue-200" },
+                  { id: "pending", label: "Pending Decision", activeClass: "bg-amber-50 text-amber-700 border-amber-200" },
+                  { id: "approved", label: "Approved", activeClass: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+                  { id: "rejected", label: "Rejected", activeClass: "bg-rose-50 text-rose-700 border-rose-200" },
+                  { id: "info", label: "Evidence Needed", activeClass: "bg-purple-50 text-purple-700 border-purple-200" },
                 ].map((f) => (
                   <button
                     key={f.id}
                     onClick={() => setClaimsFilter(f.id)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                    className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${
                       claimsFilter === f.id
-                        ? "bg-slate-900 text-white"
-                        : "bg-slate-100 text-slate-600 hover:text-slate-900"
+                        ? `${f.activeClass} font-semibold shadow-2xs`
+                        : "bg-slate-50 text-slate-600 border-slate-200/80 hover:bg-slate-100 hover:text-slate-800"
                     }`}
                   >
                     {f.label}
