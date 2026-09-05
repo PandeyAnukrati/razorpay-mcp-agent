@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useLocation } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 // Claude commented out - pure Gemini runtime
 // import { getClaudeSupportResponse } from "@/services/claude"
@@ -94,8 +94,11 @@ function readFileAsText(file: File): Promise<string> {
 
 export function Dashboard() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [user, setUser] = useState<any>(() => auth.currentUser)
   const [currentView, setCurrentView] = useState<"menu" | "chat" | "sessions-list" | "webhooks" | "merchant">(() => {
+    const fromState = (location.state as any)?.view
+    if (fromState === "merchant") return "merchant"
     return (safeStorageGet("rzp_current_view", "menu") as any)
   })
   const [backView, setBackView] = useState<"menu" | "sessions-list">(() => {
@@ -142,6 +145,15 @@ export function Dashboard() {
       }
     }
   }, [sessions])
+
+  // Sync view when navigating with location state or storage
+  useEffect(() => {
+    const targetView = (location.state as any)?.view || safeStorageGet("rzp_current_view", "")
+    if (targetView === "merchant" && currentView !== "merchant") {
+      setIsMerchantLoggedIn(true)
+      setCurrentView("merchant")
+    }
+  }, [location])
 
   // Keep navigation view and active session synced safely
   useEffect(() => {
@@ -544,38 +556,20 @@ export function Dashboard() {
     }
   }
 
-  const handleQuickSuperMerchantLogin = () => {
+  const handleMerchantFormSubmit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault()
+    const email = (loginEmailInput && loginEmailInput.trim()) || "merchant@razorpay.com"
     setIsMerchantLoggedIn(true)
-    setMerchantEmail("merchant@razorpay.com")
+    setMerchantEmail(email)
     safeStorageSet("rzp_merchant_logged_in", "true")
-    safeStorageSet("rzp_merchant_email", "merchant@razorpay.com")
-    setIsMerchantModalOpen(false)
-    setLoginError("")
-    setCurrentView("merchant")
-  }
-
-  const handleMerchantFormSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!loginEmailInput.trim() || !loginPasswordInput.trim()) {
-      setLoginError("Please enter your merchant credentials.")
-      return
-    }
-    setIsMerchantLoggedIn(true)
-    setMerchantEmail(loginEmailInput.trim())
-    safeStorageSet("rzp_merchant_logged_in", "true")
-    safeStorageSet("rzp_merchant_email", loginEmailInput.trim())
+    safeStorageSet("rzp_merchant_email", email)
+    safeStorageSet("rzp_current_view", "merchant")
     setIsMerchantModalOpen(false)
     setLoginError("")
     setCurrentView("merchant")
   }
 
   const handleGoBack = () => {
-    if (currentView === "merchant") {
-      setCurrentView("chat")
-      setBackView("menu")
-      return
-    }
-
     if (currentView === "chat") {
       if (backView === "sessions-list") {
         setCurrentView("sessions-list")
@@ -920,6 +914,22 @@ export function Dashboard() {
     }
   }
 
+  // Dedicated Merchant Portal View - Completely isolates Merchant from Customer Chat
+  if (isMerchantLoggedIn || currentView === "merchant") {
+    return (
+      <MerchantPortal
+        merchantEmail={merchantEmail}
+        onSignOut={() => {
+          setIsMerchantLoggedIn(false)
+          safeStorageRemove("rzp_merchant_logged_in")
+          safeStorageRemove("rzp_merchant_email")
+          safeStorageSet("rzp_current_view", "menu")
+          navigate("/")
+        }}
+      />
+    )
+  }
+
   return (
     <div
       ref={dashboardRef}
@@ -1021,26 +1031,15 @@ export function Dashboard() {
               <span className="md:hidden">Webhooks</span>
             </Button>
 
-            {/* Super Merchant Portal Button */}
+            {/* Merchant Portal Button */}
             <Button
               variant="outline"
               onClick={handleOpenMerchantPortal}
-              className={`h-9 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all duration-200 ${
-                currentView === "merchant"
-                  ? "border-amber-500 bg-amber-500 text-white shadow-md shadow-amber-500/20"
-                  : isMerchantLoggedIn
-                  ? "border-amber-500/50 bg-amber-500/15 hover:bg-amber-500/25 text-amber-500 dark:text-amber-300 shadow-sm"
-                  : "border-slate-700/80 bg-slate-800/40 hover:bg-slate-800 text-slate-200 hover:border-amber-500/40"
-              }`}
+              className="h-9 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-xs hover:border-slate-300 text-xs font-medium flex items-center gap-1.5 transition-all duration-200 cursor-pointer"
             >
-              <Building2 className="h-3.5 w-3.5 text-amber-400" />
-              <span className="hidden lg:inline">
-                {isMerchantLoggedIn ? "👑 Merchant Portal" : "👑 Merchant Login"}
-              </span>
+              <Building2 className="h-3.5 w-3.5 text-[#305EFF]" />
+              <span className="hidden lg:inline">Merchant Login</span>
               <span className="lg:hidden">Merchant</span>
-              {isMerchantLoggedIn && (
-                <span className="h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
-              )}
             </Button>
 
             <Button
@@ -1406,13 +1405,6 @@ export function Dashboard() {
         <WebhookAutomationPage onSendToChat={handleSendAutomationAlert} />
       )}
 
-      {/* 2.5 SUPER MERCHANT PORTAL FULL VIEW */}
-      {currentView === "merchant" && (
-        <MerchantPortal
-          onBackToChat={() => setCurrentView("chat")}
-          merchantEmail={merchantEmail}
-        />
-      )}
 
       {/* 3. LIVE RAZORPAY MCP EXPLORER MODAL */}
       {isDataModalOpen && (
@@ -1795,25 +1787,25 @@ export function Dashboard() {
         </div>
       )}
 
-      {/* 5. SUPER MERCHANT LOGIN MODAL */}
+      {/* 5. MERCHANT LOGIN MODAL - MINIMAL LIGHT MODE */}
       {isMerchantModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fade">
-          <div className="bg-[#0f1422] border border-slate-700/80 rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden text-slate-100 animate-in zoom-in-95">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/30 backdrop-blur-xs animate-fade">
+          <div className="bg-white border border-slate-200/90 rounded-2xl shadow-xl max-w-md w-full overflow-hidden text-slate-800 animate-in zoom-in-95">
             {/* Modal Header */}
-            <div className="border-b border-slate-800/90 px-6 py-5 flex items-center justify-between bg-slate-900/60">
-              <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-400">
-                  <Building2 className="h-6 w-6" />
+            <div className="border-b border-slate-100 px-6 py-4 flex items-center justify-between bg-white">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-[#305EFF] border border-blue-100/60">
+                  <Building2 className="h-4.5 w-4.5" />
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h3 className="text-base font-bold text-white">Merchant Portal</h3>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
-                      Enterprise Tier
+                    <h3 className="text-sm font-bold text-slate-900">Merchant Portal</h3>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-blue-50 text-[#305EFF] border border-blue-100">
+                      Standard
                     </span>
                   </div>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    Authorize high-value refunds, review AI evidence dossiers & inspect customer CRM.
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Customer tickets, refund claims & live Razorpay CRM.
                   </p>
                 </div>
               </div>
@@ -1822,104 +1814,66 @@ export function Dashboard() {
                   setIsMerchantModalOpen(false)
                   setLoginError("")
                 }}
-                className="h-8 w-8 rounded-full border border-slate-700 bg-slate-800/80 flex items-center justify-center text-slate-400 hover:text-white transition-colors"
+                className="h-7 w-7 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 flex items-center justify-center transition-colors cursor-pointer"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
             {/* Modal Body */}
-            <div className="p-6 space-y-5">
-              {/* Seeded Merchant Credentials Callout */}
-              <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-indigo-500/10 to-slate-900 border border-amber-500/30 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
-                    👑 Seeded Merchant Credentials
-                  </span>
-                  <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500/20 text-amber-200 font-mono">
-                    Pre-configured
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 gap-2 text-xs font-mono bg-slate-950/70 p-2.5 rounded-xl border border-slate-800">
-                  <div>
-                    <span className="text-slate-500 text-[10px] block">Email:</span>
-                    <strong className="text-slate-200">merchant@razorpay.com</strong>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 text-[10px] block">Password:</span>
-                    <strong className="text-slate-200">Merchant2026!</strong>
-                  </div>
-                </div>
-
-                {/* 1-Click Quick Login Button */}
-                <Button
-                  type="button"
-                  onClick={handleQuickSuperMerchantLogin}
-                  className="w-full h-10 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs shadow-lg shadow-amber-500/20 gap-2 mt-1"
-                >
-                  <Zap className="w-4 h-4 text-slate-950 fill-current" />
-                  ⚡ 1-Click Quick-Login as Merchant
-                </Button>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <div className="flex-1 h-px bg-slate-800" />
-                <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">or sign in manually</span>
-                <div className="flex-1 h-px bg-slate-800" />
-              </div>
-
+            <div className="p-6 space-y-4">
               {loginError && (
-                <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-xs text-rose-300">
+                <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-600">
                   {loginError}
                 </div>
               )}
 
-              {/* Manual Login Form */}
-              <form onSubmit={handleMerchantFormSubmit} className="space-y-4">
+              {/* Merchant Login Form */}
+              <form onSubmit={handleMerchantFormSubmit} className="space-y-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                  <label className="block text-xs font-medium text-slate-700 mb-1">
                     Merchant Email
                   </label>
                   <input
                     type="email"
                     value={loginEmailInput}
                     onChange={(e) => setLoginEmailInput(e.target.value)}
-                    className="w-full h-10 rounded-xl border border-slate-700 bg-slate-950 px-4 text-xs text-white focus:outline-none focus:border-amber-400"
+                    className="w-full h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#305EFF] focus:ring-1 focus:ring-[#305EFF]"
                     placeholder="merchant@razorpay.com"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                  <label className="block text-xs font-medium text-slate-700 mb-1">
                     Password
                   </label>
                   <input
                     type="password"
                     value={loginPasswordInput}
                     onChange={(e) => setLoginPasswordInput(e.target.value)}
-                    className="w-full h-10 rounded-xl border border-slate-700 bg-slate-950 px-4 text-xs text-white focus:outline-none focus:border-amber-400"
+                    className="w-full h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#305EFF] focus:ring-1 focus:ring-[#305EFF]"
                     placeholder="••••••••••••"
                   />
                 </div>
 
                 <div className="pt-2 flex items-center justify-end gap-2">
-                  <Button
+                  <button
                     type="button"
-                    variant="outline"
                     onClick={() => {
                       setIsMerchantModalOpen(false)
                       setLoginError("")
                     }}
-                    className="border-slate-700 bg-slate-800 text-slate-300 text-xs h-9 px-4"
+                    className="border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-xs h-9 px-3.5 rounded-lg cursor-pointer transition-colors"
                   >
                     Cancel
-                  </Button>
-                  <Button
+                  </button>
+                  <button
                     type="submit"
-                    className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs h-9 px-5"
+                    onClick={handleMerchantFormSubmit}
+                    className="bg-[#305EFF] hover:bg-[#254bdb] text-white font-medium text-xs h-9 px-4 rounded-lg shadow-sm cursor-pointer transition-colors"
                   >
                     Enter Merchant Portal →
-                  </Button>
+                  </button>
                 </div>
               </form>
             </div>

@@ -245,10 +245,10 @@ export function Auth() {
               localStorage.setItem("rzp_current_view", "merchant")
               navigate("/dashboard")
             }}
-            className="h-9 px-3.5 rounded-xl border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 dark:text-amber-400 font-bold text-xs shadow-sm flex items-center gap-1.5 cursor-pointer"
+            className="h-9 px-3.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 font-medium text-xs shadow-xs flex items-center gap-1.5 cursor-pointer"
           >
-            <Building2 className="h-3.5 w-3.5 text-amber-500" />
-            <span>👑 Merchant Login</span>
+            <Building2 className="h-3.5 w-3.5 text-slate-500" />
+            <span>Merchant Login</span>
           </Button>
         </div>
 

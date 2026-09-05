@@ -6,7 +6,6 @@ import {
   XCircle,
   FileText,
   Search,
-  ArrowLeft,
   RefreshCw,
   Zap,
   Eye,
@@ -22,8 +21,8 @@ import {
   Users,
   Image as ImageIcon,
   CheckCircle,
+  LogOut,
 } from "lucide-react"
-import { Button } from "@/components/ui/button"
 import {
   getRefundClaims,
   settleRefundClaim,
@@ -34,13 +33,13 @@ import { getAllChatSessions, type ChatSession } from "@/services/firebaseChat"
 import { mcpListPayments, mcpListOrders, formatINR } from "@/services/mcpClient"
 
 interface MerchantPortalProps {
-  onBackToChat: () => void
+  onSignOut?: () => void
   merchantEmail?: string
 }
 
 type TabKey = "claims" | "tickets" | "customers" | "payments"
 
-export function MerchantPortal({ onBackToChat, merchantEmail = "merchant@razorpay.com" }: MerchantPortalProps) {
+export function MerchantPortal({ onSignOut, merchantEmail = "merchant@razorpay.com" }: MerchantPortalProps) {
   const [activeTab, setActiveTab] = useState<TabKey>("claims")
   const [claims, setClaims] = useState<RefundClaim[]>([])
   const [tickets, setTickets] = useState<ChatSession[]>([])
@@ -127,8 +126,8 @@ export function MerchantPortal({ onBackToChat, merchantEmail = "merchant@razorpa
         setActionNote("")
         if (action === "approve") {
           showToast(
-            "Refund Approved & Settled!",
-            `Refund executed via Razorpay MCP. Refund ID: ${result.refundId || "rfnd_instant"}. Real-time webhook card dispatched to customer chat.`,
+            "Refund Approved & Settled",
+            `Refund processed via Razorpay MCP. Refund ID: ${result.refundId || "rfnd_instant"}. Real-time webhook card dispatched to customer chat.`,
             "success"
           )
         } else if (action === "reject") {
@@ -232,33 +231,33 @@ export function MerchantPortal({ onBackToChat, merchantEmail = "merchant@razorpa
   }, [tickets, claims, payments])
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-[#0a0d14] text-slate-100 overflow-hidden font-sans">
+    <div className="flex h-screen w-full bg-[#f8fafc] text-slate-800 overflow-hidden font-sans">
       {/* Toast Notification */}
       {feedbackToast && (
         <div
-          className={`fixed top-5 right-5 z-50 max-w-md p-4 rounded-xl border shadow-2xl backdrop-blur-md transition-all duration-300 animate-in fade-in slide-in-from-top-4 ${
+          className={`fixed top-5 right-5 z-50 max-w-md p-4 rounded-xl border shadow-lg backdrop-blur-md transition-all duration-300 animate-in fade-in slide-in-from-top-4 ${
             feedbackToast.type === "success"
-              ? "bg-emerald-950/90 border-emerald-500/50 text-emerald-200"
+              ? "bg-emerald-50 border-emerald-200 text-emerald-900"
               : feedbackToast.type === "error"
-              ? "bg-rose-950/90 border-rose-500/50 text-rose-200"
-              : "bg-blue-950/90 border-blue-500/50 text-blue-200"
+              ? "bg-rose-50 border-rose-200 text-rose-900"
+              : "bg-blue-50 border-blue-200 text-blue-900"
           }`}
         >
           <div className="flex items-start gap-3">
             {feedbackToast.type === "success" ? (
-              <CheckCircle className="w-5 h-5 text-emerald-400 mt-0.5 flex-shrink-0" />
+              <CheckCircle className="w-5 h-5 text-emerald-600 mt-0.5 flex-shrink-0" />
             ) : feedbackToast.type === "error" ? (
-              <XCircle className="w-5 h-5 text-rose-400 mt-0.5 flex-shrink-0" />
+              <XCircle className="w-5 h-5 text-rose-600 mt-0.5 flex-shrink-0" />
             ) : (
-              <Info className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" />
+              <Info className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
             )}
             <div className="flex-1">
-              <div className="font-semibold text-sm">{feedbackToast.title}</div>
-              <div className="text-xs mt-1 text-slate-300 leading-relaxed">{feedbackToast.desc}</div>
+              <div className="font-semibold text-xs">{feedbackToast.title}</div>
+              <div className="text-[11px] mt-0.5 text-slate-600 leading-relaxed">{feedbackToast.desc}</div>
             </div>
             <button
               onClick={() => setFeedbackToast(null)}
-              className="text-slate-400 hover:text-white text-xs p-1"
+              className="text-slate-400 hover:text-slate-700 text-xs p-1 cursor-pointer"
             >
               <X className="w-4 h-4" />
             </button>
@@ -266,202 +265,272 @@ export function MerchantPortal({ onBackToChat, merchantEmail = "merchant@razorpa
         </div>
       )}
 
-      {/* TOP HEADER */}
-      <header className="px-6 py-3.5 bg-[#0f1422] border-b border-slate-800/80 flex items-center justify-between flex-shrink-0">
-        <div className="flex items-center gap-4">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onBackToChat}
-            className="border-slate-700 bg-slate-800/50 hover:bg-slate-700/60 text-slate-200 gap-2 h-9 px-3"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Back to Customer Chat
-          </Button>
-
-          <div className="h-6 w-px bg-slate-800" />
-
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-amber-500 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-indigo-500/20">
-              <Building2 className="w-4 h-4" />
+      {/* 1. CLEAN SLEEK SIDEBAR */}
+      <aside className="w-64 bg-white border-r border-slate-200 flex flex-col justify-between h-full shrink-0 select-none z-20">
+        <div>
+          {/* Brand Header */}
+          <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-blue-50 text-[#305EFF] border border-blue-100/80 flex items-center justify-center shadow-xs">
+                <Building2 className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <span className="font-bold text-sm text-slate-900 tracking-tight">Merchant Portal</span>
+                  <span className="px-1.5 py-0.2 rounded-full text-[9px] font-semibold bg-blue-50 text-[#305EFF] border border-blue-100">
+                    Live
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-400 font-medium">Razorpay MCP Platform</p>
+              </div>
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-sm tracking-tight text-white">Razorpay Merchant Portal</span>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-wide bg-amber-500/20 border border-amber-500/40 text-amber-300">
-                  👑 Merchant Mode
+          </div>
+
+          {/* Navigation Links */}
+          <div className="p-3 space-y-1">
+            <div className="px-3 pt-2 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+              Operations
+            </div>
+
+            <button
+              onClick={() => setActiveTab("claims")}
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-colors cursor-pointer ${
+                activeTab === "claims"
+                  ? "bg-[#305EFF] text-white shadow-xs font-semibold"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <ShieldAlert className={`w-4 h-4 ${activeTab === "claims" ? "text-white" : "text-slate-500"}`} />
+                <span>Refund Escalations</span>
+              </div>
+              {pendingClaims.length > 0 && (
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                  activeTab === "claims" ? "bg-white text-[#305EFF]" : "bg-amber-100 text-amber-800"
+                }`}>
+                  {pendingClaims.length}
                 </span>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-indigo-500/15 border border-indigo-500/30 text-indigo-300">
-                  Tier 1 Enterprise
+              )}
+            </button>
+
+            <button
+              onClick={() => setActiveTab("tickets")}
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-colors cursor-pointer ${
+                activeTab === "tickets"
+                  ? "bg-[#305EFF] text-white shadow-xs font-semibold"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <MessageSquare className={`w-4 h-4 ${activeTab === "tickets" ? "text-white" : "text-slate-500"}`} />
+                <span>Support Tickets</span>
+              </div>
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${
+                activeTab === "tickets" ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600"
+              }`}>
+                {tickets.length}
+              </span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab("customers")}
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-colors cursor-pointer ${
+                activeTab === "customers"
+                  ? "bg-[#305EFF] text-white shadow-xs font-semibold"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Users className={`w-4 h-4 ${activeTab === "customers" ? "text-white" : "text-slate-500"}`} />
+                <span>Customer Directory</span>
+              </div>
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${
+                activeTab === "customers" ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600"
+              }`}>
+                {customerDirectory.length}
+              </span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab("payments")}
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-colors cursor-pointer ${
+                activeTab === "payments"
+                  ? "bg-[#305EFF] text-white shadow-xs font-semibold"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <CreditCard className={`w-4 h-4 ${activeTab === "payments" ? "text-white" : "text-slate-500"}`} />
+                <span>Live Transactions</span>
+              </div>
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${
+                activeTab === "payments" ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600"
+              }`}>
+                {payments.length}
+              </span>
+            </button>
+
+            <div className="pt-4 px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+              Gateway Status
+            </div>
+
+            <div className="p-3 mx-1 rounded-xl bg-slate-50 border border-slate-200/70 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-medium text-slate-700">Razorpay MCP</span>
+                <span className="flex items-center gap-1 text-[10px] font-semibold text-emerald-600">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Live
                 </span>
               </div>
-              <p className="text-[11px] text-slate-400">
-                Logged in as <strong className="text-slate-200">{merchantEmail}</strong> • Razorpay Model Context Protocol (MCP) Live
+              <p className="text-[10px] text-slate-400 leading-relaxed">
+                Autonomous AI dispute triage & direct live settlements.
               </p>
             </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={loadData}
-            disabled={refreshing}
-            className="border-slate-700 bg-slate-800/40 text-slate-300 hover:text-white hover:bg-slate-700/50 gap-1.5 h-8 text-xs"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin text-indigo-400" : ""}`} />
-            Sync Live Data
-          </Button>
-
-          <div className="px-3 py-1 bg-emerald-500/10 border border-emerald-500/30 rounded-lg flex items-center gap-2 text-xs text-emerald-300">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            Live Gateway Active
-          </div>
-        </div>
-      </header>
-
-      {/* QUICK STATS STRIP */}
-      <div className="px-6 py-3 bg-[#0d111d] border-b border-slate-800/60 grid grid-cols-2 md:grid-cols-4 gap-4 flex-shrink-0">
-        <div className="p-3 bg-slate-900/60 border border-slate-800/80 rounded-xl flex items-center justify-between">
-          <div>
-            <div className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">AI Refund Escalations</div>
-            <div className="text-xl font-bold text-amber-400 mt-0.5 flex items-center gap-2">
-              {pendingClaims.length}
-              {pendingClaims.length > 0 && (
-                <span className="text-[10px] font-normal px-2 py-0.5 bg-amber-500/20 border border-amber-500/40 rounded-full text-amber-300 animate-pulse">
-                  Action Required
-                </span>
-              )}
+        {/* Sidebar Footer */}
+        <div className="p-3 border-t border-slate-100 bg-slate-50/60 space-y-2">
+          {/* Merchant Profile Card */}
+          <div className="p-2.5 rounded-xl bg-white border border-slate-200/80 flex items-center gap-2.5 shadow-2xs">
+            <div className="w-8 h-8 rounded-lg bg-[#305EFF]/10 text-[#305EFF] font-bold text-xs flex items-center justify-center shrink-0">
+              M
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-xs font-semibold text-slate-800 truncate" title={merchantEmail}>
+                {merchantEmail}
+              </div>
+              <div className="text-[10px] text-slate-400">Authorized Merchant</div>
             </div>
           </div>
-          <div className="w-9 h-9 rounded-lg bg-amber-500/10 border border-amber-500/25 flex items-center justify-center text-amber-400">
-            <ShieldAlert className="w-5 h-5" />
-          </div>
-        </div>
 
-        <div className="p-3 bg-slate-900/60 border border-slate-800/80 rounded-xl flex items-center justify-between">
-          <div>
-            <div className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Claims Volume Under Review</div>
-            <div className="text-xl font-bold text-white mt-0.5">
-              {formatINR(totalVolumeUnderReview * 100)}
-            </div>
-          </div>
-          <div className="w-9 h-9 rounded-lg bg-indigo-500/10 border border-indigo-500/25 flex items-center justify-center text-indigo-400">
-            <DollarSign className="w-5 h-5" />
-          </div>
-        </div>
-
-        <div className="p-3 bg-slate-900/60 border border-slate-800/80 rounded-xl flex items-center justify-between">
-          <div>
-            <div className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Support Chat Sessions</div>
-            <div className="text-xl font-bold text-sky-400 mt-0.5">{tickets.length}</div>
-          </div>
-          <div className="w-9 h-9 rounded-lg bg-sky-500/10 border border-sky-500/25 flex items-center justify-center text-sky-400">
-            <MessageSquare className="w-5 h-5" />
-          </div>
-        </div>
-
-        <div className="p-3 bg-slate-900/60 border border-slate-800/80 rounded-xl flex items-center justify-between">
-          <div>
-            <div className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Customer CRM Profiles</div>
-            <div className="text-xl font-bold text-emerald-400 mt-0.5">{customerDirectory.length}</div>
-          </div>
-          <div className="w-9 h-9 rounded-lg bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center text-emerald-400">
-            <Users className="w-5 h-5" />
-          </div>
-        </div>
-      </div>
-
-      {/* NAVIGATION TABS */}
-      <div className="px-6 border-b border-slate-800 bg-[#0f1422] flex items-center gap-1 flex-shrink-0">
-        <button
-          onClick={() => setActiveTab("claims")}
-          className={`px-4 py-3 text-xs font-semibold border-b-2 flex items-center gap-2 transition-all ${
-            activeTab === "claims"
-              ? "border-amber-400 text-amber-300 bg-amber-500/5"
-              : "border-transparent text-slate-400 hover:text-slate-200"
-          }`}
-        >
-          <ShieldAlert className="w-4 h-4" />
-          AI Refund Escalation Desk
-          {pendingClaims.length > 0 && (
-            <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-amber-500 text-slate-950 font-bold">
-              {pendingClaims.length}
-            </span>
+          {/* Logout Button */}
+          {onSignOut && (
+            <button
+              onClick={onSignOut}
+              className="w-full h-8.5 rounded-xl border border-slate-200 hover:border-rose-200 bg-white hover:bg-rose-50 text-slate-600 hover:text-rose-600 font-medium text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              Sign Out & Exit Portal
+            </button>
           )}
-        </button>
+        </div>
+      </aside>
 
-        <button
-          onClick={() => setActiveTab("tickets")}
-          className={`px-4 py-3 text-xs font-semibold border-b-2 flex items-center gap-2 transition-all ${
-            activeTab === "tickets"
-              ? "border-indigo-400 text-indigo-300 bg-indigo-500/5"
-              : "border-transparent text-slate-400 hover:text-slate-200"
-          }`}
-        >
-          <MessageSquare className="w-4 h-4" />
-          Support Tickets & Transcripts
-          <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-slate-800 text-slate-300">
-            {tickets.length}
-          </span>
-        </button>
+      {/* 2. MAIN CONTENT AREA */}
+      <main className="flex-1 flex flex-col h-full min-w-0 overflow-hidden bg-[#f8fafc]">
+        {/* Top Content Bar */}
+        <header className="px-6 py-3.5 bg-white border-b border-slate-200 flex items-center justify-between shrink-0 shadow-2xs">
+          <div>
+            <h1 className="text-base font-bold text-slate-900 tracking-tight">
+              {activeTab === "claims" && "Refund Escalations Desk"}
+              {activeTab === "tickets" && "Customer Support Tickets"}
+              {activeTab === "customers" && "Customer Directory & CRM"}
+              {activeTab === "payments" && "Razorpay Live Payments & Orders"}
+            </h1>
+            <p className="text-xs text-slate-400">
+              {activeTab === "claims" && "Review autonomous AI investigations and authorize high-value settlements"}
+              {activeTab === "tickets" && "All customer support conversations logged in real-time"}
+              {activeTab === "customers" && "Aggregate customer directory, total spend, and claim history"}
+              {activeTab === "payments" && "Direct real-time Razorpay Model Context Protocol gateway"}
+            </p>
+          </div>
 
-        <button
-          onClick={() => setActiveTab("customers")}
-          className={`px-4 py-3 text-xs font-semibold border-b-2 flex items-center gap-2 transition-all ${
-            activeTab === "customers"
-              ? "border-emerald-400 text-emerald-300 bg-emerald-500/5"
-              : "border-transparent text-slate-400 hover:text-slate-200"
-          }`}
-        >
-          <Users className="w-4 h-4" />
-          Customer CRM & Profiles
-          <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-slate-800 text-slate-300">
-            {customerDirectory.length}
-          </span>
-        </button>
+          <div className="flex items-center gap-2.5">
+            <button
+              onClick={loadData}
+              disabled={refreshing}
+              className="border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium rounded-lg px-3 h-8 flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin text-[#305EFF]" : "text-slate-500"}`} />
+              Sync Data
+            </button>
 
-        <button
-          onClick={() => setActiveTab("payments")}
-          className={`px-4 py-3 text-xs font-semibold border-b-2 flex items-center gap-2 transition-all ${
-            activeTab === "payments"
-              ? "border-sky-400 text-sky-300 bg-sky-500/5"
-              : "border-transparent text-slate-400 hover:text-slate-200"
-          }`}
-        >
-          <CreditCard className="w-4 h-4" />
-          Live Razorpay Payments & Orders
-        </button>
-      </div>
+            <div className="px-2.5 py-1 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center gap-1.5 text-xs text-emerald-700 font-medium">
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              Live Gateway
+            </div>
+          </div>
+        </header>
 
-      {/* MAIN VIEW CONTENT AREA */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        {/* Quick Stats Strip */}
+        <div className="px-6 py-3.5 bg-slate-50/60 border-b border-slate-200 grid grid-cols-2 md:grid-cols-4 gap-3.5 shrink-0">
+          <div className="p-3 bg-white border border-slate-200 rounded-xl flex items-center justify-between shadow-xs">
+            <div>
+              <div className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">AI Refund Escalations</div>
+              <div className="text-lg font-bold text-slate-900 mt-0.5 flex items-center gap-2">
+                {pendingClaims.length}
+                {pendingClaims.length > 0 && (
+                  <span className="text-[10px] font-medium px-2 py-0.5 bg-amber-50 border border-amber-200 rounded-full text-amber-700">
+                    Needs Review
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600">
+              <ShieldAlert className="w-4 h-4 text-amber-600" />
+            </div>
+          </div>
+
+          <div className="p-3 bg-white border border-slate-200 rounded-xl flex items-center justify-between shadow-xs">
+            <div>
+              <div className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">Under Review Volume</div>
+              <div className="text-lg font-bold text-slate-900 mt-0.5">
+                {formatINR(totalVolumeUnderReview * 100)}
+              </div>
+            </div>
+            <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600">
+              <DollarSign className="w-4 h-4 text-slate-600" />
+            </div>
+          </div>
+
+          <div className="p-3 bg-white border border-slate-200 rounded-xl flex items-center justify-between shadow-xs">
+            <div>
+              <div className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">Support Chat Sessions</div>
+              <div className="text-lg font-bold text-slate-900 mt-0.5">{tickets.length}</div>
+            </div>
+            <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600">
+              <MessageSquare className="w-4 h-4 text-slate-600" />
+            </div>
+          </div>
+
+          <div className="p-3 bg-white border border-slate-200 rounded-xl flex items-center justify-between shadow-xs">
+            <div>
+              <div className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">Customer Profiles</div>
+              <div className="text-lg font-bold text-slate-900 mt-0.5">{customerDirectory.length}</div>
+            </div>
+            <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600">
+              <Users className="w-4 h-4 text-slate-600" />
+            </div>
+          </div>
+        </div>
+
+        {/* Tab Content Body */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
         {/* =========================================================================
-            TAB 1: AI REFUND ESCALATION DESK
+            TAB 1: REFUND ESCALATION DESK (Minimal Light Mode)
             ========================================================================= */}
         {activeTab === "claims" && (
-          <div className="space-y-5">
+          <div className="space-y-4">
             {/* Filter and Search Bar */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-4 bg-slate-900/80 border border-slate-800 rounded-xl">
-              <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-3.5 bg-white border border-slate-200 rounded-xl shadow-xs">
+              <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="text-xs text-slate-400 mr-1 flex items-center gap-1">
-                  <Filter className="w-3.5 h-3.5" /> Filter Status:
+                  <Filter className="w-3.5 h-3.5" /> Filter:
                 </span>
                 {[
                   { id: "all", label: "All Claims" },
-                  { id: "pending", label: "Pending Vendor Decision" },
-                  { id: "approved", label: "Approved & Refunded" },
+                  { id: "pending", label: "Pending Decision" },
+                  { id: "approved", label: "Approved" },
                   { id: "rejected", label: "Rejected" },
-                  { id: "info", label: "More Evidence Needed" },
+                  { id: "info", label: "Evidence Needed" },
                 ].map((f) => (
                   <button
                     key={f.id}
                     onClick={() => setClaimsFilter(f.id)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                    className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
                       claimsFilter === f.id
-                        ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
-                        : "bg-slate-800/60 text-slate-400 hover:text-slate-200 border border-transparent"
+                        ? "bg-slate-900 text-white"
+                        : "bg-slate-100 text-slate-600 hover:text-slate-900"
                     }`}
                   >
                     {f.label}
@@ -469,29 +538,29 @@ export function MerchantPortal({ onBackToChat, merchantEmail = "merchant@razorpa
                 ))}
               </div>
 
-              <div className="relative w-full md:w-72">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+              <div className="relative w-full md:w-64">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
                 <input
                   type="text"
-                  placeholder="Search Claim ID, customer, payment ID..."
+                  placeholder="Search claims, customers..."
                   value={claimsSearch}
                   onChange={(e) => setClaimsSearch(e.target.value)}
-                  className="w-full bg-slate-950/80 border border-slate-700/80 rounded-lg pl-9 pr-3 py-1.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-400"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#305EFF]"
                 />
               </div>
             </div>
 
             {/* Claims Cards List */}
             {filteredClaims.length === 0 ? (
-              <div className="p-12 text-center bg-slate-900/40 border border-slate-800/80 rounded-2xl">
-                <ShieldCheck className="w-12 h-12 text-slate-600 mx-auto mb-3" />
-                <h3 className="text-base font-semibold text-slate-300">No Refund Claims Found</h3>
-                <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
-                  There are no refund claims matching your current filter. When a customer in the chat requests a high-value or disputed refund, Gemini AI autonomously investigates and routes it here.
+              <div className="p-12 text-center bg-white border border-slate-200 rounded-2xl shadow-xs">
+                <ShieldCheck className="w-10 h-10 text-slate-300 mx-auto mb-2.5" />
+                <h3 className="text-sm font-semibold text-slate-700">No Refund Claims Found</h3>
+                <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
+                  There are no refund claims matching this filter.
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 gap-5">
+              <div className="grid grid-cols-1 gap-4">
                 {filteredClaims.map((claim) => {
                   const isPending = claim.status === "Pending Vendor Decision"
                   const isApproved = claim.status === "Approved & Refunded"
@@ -501,252 +570,218 @@ export function MerchantPortal({ onBackToChat, merchantEmail = "merchant@razorpa
                   return (
                     <div
                       key={claim.claimId}
-                      className={`p-5 rounded-2xl border transition-all ${
-                        isPending
-                          ? "bg-gradient-to-b from-[#161a29] to-[#0f1422] border-amber-500/40 shadow-xl shadow-amber-950/10"
-                          : isApproved
-                          ? "bg-slate-900/50 border-emerald-500/30"
-                          : isRejected
-                          ? "bg-slate-900/50 border-rose-500/30"
-                          : "bg-slate-900/50 border-slate-800"
-                      }`}
+                      className="p-5 rounded-2xl border border-slate-200 bg-white shadow-xs space-y-4"
                     >
                       {/* Claim Header */}
-                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5 border-b border-slate-100 pb-3.5">
                         <div className="flex items-center gap-3">
-                          <span className="font-mono text-xs font-bold px-2.5 py-1 bg-slate-800 text-amber-300 rounded-md border border-slate-700">
+                          <span className="font-mono text-xs font-semibold px-2 py-0.5 bg-slate-100 text-slate-800 rounded border border-slate-200">
                             {claim.claimId}
                           </span>
                           <div>
                             <div className="flex items-center gap-2">
-                              <h3 className="font-bold text-base text-white">{claim.reason}</h3>
+                              <h3 className="font-semibold text-sm text-slate-900">{claim.reason}</h3>
                               <span
-                                className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full border ${
+                                className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${
                                   isPending
-                                    ? "bg-amber-500/20 text-amber-300 border-amber-500/50 animate-pulse"
+                                    ? "bg-amber-50 text-amber-700 border-amber-200"
                                     : isApproved
-                                    ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                                     : isRejected
-                                    ? "bg-rose-500/20 text-rose-300 border-rose-500/40"
-                                    : "bg-sky-500/20 text-sky-300 border-sky-500/40"
+                                    ? "bg-rose-50 text-rose-700 border-rose-200"
+                                    : "bg-blue-50 text-blue-700 border-blue-200"
                                 }`}
                               >
                                 {claim.status}
                               </span>
                             </div>
-                            <div className="text-xs text-slate-400 mt-0.5 flex items-center gap-3">
-                              <span>Customer: <strong className="text-slate-200">{claim.customerName}</strong> ({claim.customerEmail})</span>
+                            <div className="text-xs text-slate-400 mt-0.5 flex items-center gap-2">
+                              <span>Customer: <strong className="text-slate-700 font-medium">{claim.customerName}</strong> ({claim.customerEmail})</span>
                               <span>•</span>
-                              <span>Created: {claim.createdAt}</span>
+                              <span>{claim.createdAt}</span>
                             </div>
                           </div>
                         </div>
 
-                        {/* Amount & Quick Info */}
+                        {/* Amount & ID */}
                         <div className="text-right">
-                          <div className="text-2xl font-black text-white">{claim.amountFormatted}</div>
+                          <div className="text-xl font-bold text-slate-900">{claim.amountFormatted}</div>
                           <div className="text-[11px] font-mono text-slate-400">
-                            Payment: <code className="text-indigo-300">{claim.paymentId}</code>
+                            Payment: <code className="text-slate-600">{claim.paymentId}</code>
                           </div>
                         </div>
                       </div>
 
-                      {/* AI INVESTIGATION DOSSIER & EVIDENCE ROW */}
-                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mt-4">
+                      {/* AI Investigation & Evidence Row */}
+                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                         {/* Column 1 & 2: Autonomous AI Investigation Card */}
-                        <div className="lg:col-span-2 p-4 bg-slate-950/60 border border-slate-800 rounded-xl space-y-3">
+                        <div className="lg:col-span-2 p-3.5 bg-slate-50/70 border border-slate-200/80 rounded-xl space-y-3">
                           <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <Sparkles className="w-4 h-4 text-amber-400" />
-                              <span className="text-xs font-bold uppercase tracking-wider text-amber-300">
-                                Gemini Autonomous AI Investigation
-                              </span>
+                            <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+                              <Sparkles className="w-3.5 h-3.5 text-[#305EFF]" />
+                              Autonomous AI Investigation
                             </div>
 
-                            {/* AI Validity Score Badge */}
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs text-slate-400">Validity Score:</span>
-                              <div
-                                className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${
+                            <div className="flex items-center gap-1.5 text-xs">
+                              <span className="text-slate-400 text-[11px]">Validity Score:</span>
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-[11px] font-bold border ${
                                   score >= 80
-                                    ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                                     : score >= 60
-                                    ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
-                                    : "bg-rose-500/20 text-rose-300 border-rose-500/40"
+                                    ? "bg-amber-50 text-amber-700 border-amber-200"
+                                    : "bg-rose-50 text-rose-700 border-rose-200"
                                 }`}
                               >
-                                🛡️ {score}/100 ({score >= 80 ? "High Credibility" : "Needs Review"})
-                              </div>
+                                {score}/100 ({score >= 80 ? "High Credibility" : "Review"})
+                              </span>
                             </div>
                           </div>
 
-                          {/* AI Summary */}
-                          <div className="text-xs text-slate-300 bg-slate-900/70 p-3 rounded-lg border border-slate-800/80 leading-relaxed">
-                            <strong className="text-slate-100">AI Finding:</strong> {claim.aiInvestigation?.summary}
+                          <div className="text-xs text-slate-600 bg-white p-3 rounded-lg border border-slate-200 leading-relaxed">
+                            <strong className="text-slate-800">Finding:</strong> {claim.aiInvestigation?.summary}
                           </div>
 
-                          {/* Policy Checklist & Escalation Reason */}
                           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
-                            <div className="p-2 bg-slate-900/50 rounded-lg border border-slate-800 flex items-center gap-2 text-slate-300">
-                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
-                              <span>Live Payment Captured</span>
+                            <div className="p-2 bg-white rounded-lg border border-slate-200 flex items-center gap-1.5 text-slate-600">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+                              <span>Payment Captured</span>
                             </div>
-                            <div className="p-2 bg-slate-900/50 rounded-lg border border-slate-800 flex items-center gap-2 text-slate-300">
-                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
-                              <span>14-Day Window Valid</span>
+                            <div className="p-2 bg-white rounded-lg border border-slate-200 flex items-center gap-1.5 text-slate-600">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+                              <span>Window Valid</span>
                             </div>
-                            <div className="p-2 bg-slate-900/50 rounded-lg border border-slate-800 flex items-center gap-2 text-slate-300">
-                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
-                              <span>Evidence Corroborated</span>
+                            <div className="p-2 bg-white rounded-lg border border-slate-200 flex items-center gap-1.5 text-slate-600">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+                              <span>Evidence Matched</span>
                             </div>
-                            <div className="p-2 bg-slate-900/50 rounded-lg border border-slate-800 flex items-center gap-2 text-slate-300">
-                              <ShieldCheck className="w-3.5 h-3.5 text-sky-400 flex-shrink-0" />
-                              <span>Low Chargeback Risk</span>
+                            <div className="p-2 bg-white rounded-lg border border-slate-200 flex items-center gap-1.5 text-slate-600">
+                              <ShieldCheck className="w-3.5 h-3.5 text-blue-600 flex-shrink-0" />
+                              <span>Low Risk</span>
                             </div>
                           </div>
 
-                          {/* AI Recommendation Box */}
-                          <div className="p-2.5 bg-indigo-950/40 border border-indigo-500/30 rounded-lg flex items-start gap-2.5 text-xs text-indigo-200">
-                            <Zap className="w-4 h-4 text-indigo-400 mt-0.5 flex-shrink-0" />
-                            <div>
-                              <strong className="text-white">AI Recommendation:</strong> {claim.aiInvestigation?.recommendation}
-                              <div className="text-[11px] text-indigo-300/80 mt-0.5">
-                                Reason for Human Sign-off: {claim.aiInvestigation?.escalationReason}
-                              </div>
+                          <div className="p-2.5 bg-blue-50/70 border border-blue-100 rounded-lg text-xs text-blue-900 leading-relaxed">
+                            <strong>Recommendation:</strong> {claim.aiInvestigation?.recommendation}
+                            <div className="text-[11px] text-blue-700 mt-0.5">
+                              Note: {claim.aiInvestigation?.escalationReason}
                             </div>
                           </div>
                         </div>
 
                         {/* Column 3: Attached Customer Evidence Gallery */}
-                        <div className="p-4 bg-slate-950/60 border border-slate-800 rounded-xl flex flex-col justify-between">
+                        <div className="p-3.5 bg-slate-50/70 border border-slate-200/80 rounded-xl flex flex-col justify-between">
                           <div>
-                            <div className="flex items-center justify-between mb-2.5">
-                              <div className="flex items-center gap-1.5 text-xs font-bold text-slate-300">
-                                <FileText className="w-4 h-4 text-sky-400" />
-                                Customer Attached Evidence ({claim.attachedDocs?.length || 0})
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                                <FileText className="w-3.5 h-3.5 text-slate-500" />
+                                Evidence Files ({claim.attachedDocs?.length || 0})
                               </div>
-                              <span className="text-[10px] text-slate-500">Verified Files</span>
                             </div>
 
                             {(!claim.attachedDocs || claim.attachedDocs.length === 0) ? (
-                              <div className="p-4 text-center border border-dashed border-slate-800 rounded-lg text-slate-500 text-xs">
-                                No physical documents attached. AI evaluated transaction telemetry.
+                              <div className="p-4 text-center border border-dashed border-slate-200 rounded-lg text-slate-400 text-xs bg-white">
+                                No physical documents attached.
                               </div>
                             ) : (
-                              <div className="space-y-2">
+                              <div className="space-y-1.5">
                                 {claim.attachedDocs.map((doc, idx) => (
                                   <div
                                     key={idx}
-                                    className="p-2 bg-slate-900/70 border border-slate-800 rounded-lg flex items-center justify-between hover:border-slate-700 transition-all cursor-pointer group"
+                                    className="p-2 bg-white border border-slate-200 rounded-lg flex items-center justify-between hover:border-slate-300 transition-colors cursor-pointer group"
                                     onClick={() => setPreviewEvidence(doc)}
                                   >
-                                    <div className="flex items-center gap-2.5 min-w-0">
+                                    <div className="flex items-center gap-2 min-w-0">
                                       {doc.type === "image" || doc.previewUrl ? (
-                                        <div className="w-8 h-8 rounded bg-slate-800 overflow-hidden flex-shrink-0 relative">
+                                        <div className="w-7 h-7 rounded bg-slate-100 overflow-hidden flex-shrink-0 relative">
                                           {doc.previewUrl ? (
                                             <img
                                               src={doc.previewUrl}
                                               alt={doc.name}
-                                              className="w-full h-full object-cover group-hover:scale-110 transition-transform"
+                                              className="w-full h-full object-cover"
                                             />
                                           ) : (
-                                            <ImageIcon className="w-4 h-4 text-indigo-400 m-2" />
+                                            <ImageIcon className="w-3.5 h-3.5 text-slate-400 m-1.5" />
                                           )}
                                         </div>
                                       ) : (
-                                        <div className="w-8 h-8 rounded bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400 flex-shrink-0">
-                                          <FileText className="w-4 h-4" />
+                                        <div className="w-7 h-7 rounded bg-slate-100 flex items-center justify-center text-slate-500 flex-shrink-0">
+                                          <FileText className="w-3.5 h-3.5" />
                                         </div>
                                       )}
                                       <div className="min-w-0">
-                                        <div className="text-xs font-medium text-slate-200 truncate group-hover:text-amber-300">
+                                        <div className="text-xs font-medium text-slate-800 truncate group-hover:text-[#305EFF]">
                                           {doc.name}
                                         </div>
-                                        <div className="text-[10px] text-slate-500">{doc.size || "120 KB"} • Click to Inspect</div>
+                                        <div className="text-[10px] text-slate-400">{doc.size || "120 KB"}</div>
                                       </div>
                                     </div>
-                                    <Eye className="w-3.5 h-3.5 text-slate-400 group-hover:text-white flex-shrink-0" />
+                                    <Eye className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-700 flex-shrink-0" />
                                   </div>
                                 ))}
                               </div>
                             )}
                           </div>
 
-                          {/* Button to open full claim dossier */}
                           <button
                             onClick={() => setSelectedClaim(claim)}
-                            className="mt-3 w-full py-1.5 px-3 bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-all"
+                            className="mt-3 w-full py-1.5 px-3 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                           >
                             <Info className="w-3.5 h-3.5" />
-                            Open Full Claim Audit Trail
+                            View Full Audit Trail
                           </button>
                         </div>
                       </div>
 
-                      {/* VENDOR ACTIONS BAR (Approve / Reject / Request Evidence) */}
+                      {/* VENDOR ACTIONS BAR */}
                       {isPending && (
-                        <div className="mt-4 pt-4 border-t border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-950/40 -mx-5 -mb-5 p-4 rounded-b-2xl">
-                          <div className="text-xs text-amber-200 flex items-center gap-2">
-                            <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
-                            <span>
-                              <strong>Vendor Decision Required:</strong> Settle this high-value refund via live Razorpay MCP gateway.
-                            </span>
+                        <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-50/70 -mx-5 -mb-5 p-3.5 rounded-b-2xl">
+                          <div className="text-xs text-slate-600 flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-amber-500" />
+                            <span>Merchant authorization required to execute refund.</span>
                           </div>
 
                           <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-                            <Button
-                              variant="outline"
-                              size="sm"
+                            <button
                               disabled={processingClaimId === claim.claimId}
-                              onClick={() => handleSettle(claim.claimId, "request_info", "Please upload additional unboxing video or courier damage receipt.")}
-                              className="border-slate-700 bg-slate-800 text-slate-300 hover:text-white text-xs h-8"
+                              onClick={() => handleSettle(claim.claimId, "request_info", "Please provide additional unboxing or invoice evidence.")}
+                              className="border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs h-8 px-3 rounded-lg cursor-pointer transition-colors"
                             >
                               Request Info
-                            </Button>
+                            </button>
 
-                            <Button
-                              variant="outline"
-                              size="sm"
+                            <button
                               disabled={processingClaimId === claim.claimId}
-                              onClick={() => handleSettle(claim.claimId, "reject", "Claim does not meet return window criteria.")}
-                              className="border-rose-800/60 bg-rose-950/40 text-rose-300 hover:bg-rose-900/60 hover:text-white text-xs h-8"
+                              onClick={() => handleSettle(claim.claimId, "reject", "Claim does not meet policy criteria.")}
+                              className="border border-rose-200 bg-white hover:bg-rose-50 text-rose-600 text-xs h-8 px-3 rounded-lg cursor-pointer transition-colors"
                             >
-                              <XCircle className="w-3.5 h-3.5 mr-1" />
                               Reject Claim
-                            </Button>
+                            </button>
 
-                            <Button
-                              size="sm"
+                            <button
                               disabled={processingClaimId === claim.claimId}
                               onClick={() => handleSettle(claim.claimId, "approve", "Approved by Merchant Escalation Desk after evidence verification")}
-                              className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs h-8 gap-1.5 shadow-lg shadow-emerald-600/20"
+                              className="bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs h-8 px-4 rounded-lg shadow-xs flex items-center gap-1.5 cursor-pointer transition-colors"
                             >
                               {processingClaimId === claim.claimId ? (
                                 <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                               ) : (
                                 <Zap className="w-3.5 h-3.5" />
                               )}
-                              Approve & Process Refund ({claim.amountFormatted})
-                            </Button>
+                              Approve Refund ({claim.amountFormatted})
+                            </button>
                           </div>
                         </div>
                       )}
 
-                      {/* Completed Decision Info */}
                       {!isPending && claim.vendorDecision && (
-                        <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold text-slate-300">Vendor Decision:</span>
-                            <span className="text-white">{claim.vendorDecision.action.toUpperCase()}</span>
-                            <span>•</span>
-                            <span>{claim.vendorDecision.timestamp}</span>
-                            {claim.vendorDecision.vendorNotes && (
-                              <span className="text-slate-400 italic">"{claim.vendorDecision.vendorNotes}"</span>
-                            )}
+                        <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+                          <div>
+                            Decision: <strong className="text-slate-800 uppercase">{claim.vendorDecision.action}</strong> • {claim.vendorDecision.timestamp}
                           </div>
                           {claim.vendorDecision.refundId && (
-                            <div className="font-mono text-emerald-400 text-xs">
-                              Razorpay Refund ID: <strong>{claim.vendorDecision.refundId}</strong>
+                            <div className="font-mono text-emerald-700 font-semibold">
+                              Refund ID: {claim.vendorDecision.refundId}
                             </div>
                           )}
                         </div>
@@ -760,66 +795,71 @@ export function MerchantPortal({ onBackToChat, merchantEmail = "merchant@razorpa
         )}
 
         {/* =========================================================================
-            TAB 2: CUSTOMER SUPPORT TICKETS & TRANSCRIPTS
+            TAB 2: CUSTOMER SUPPORT TICKETS (Minimal Light Mode)
             ========================================================================= */}
         {activeTab === "tickets" && (
           <div className="space-y-4">
-            <div className="flex items-center justify-between gap-3 p-4 bg-slate-900/80 border border-slate-800 rounded-xl">
+            <div className="flex items-center justify-between gap-3 p-3.5 bg-white border border-slate-200 rounded-xl shadow-xs">
               <div>
-                <h3 className="text-sm font-bold text-white">All Customer Support Tickets</h3>
+                <h3 className="text-sm font-semibold text-slate-900">Support Chat Sessions</h3>
                 <p className="text-xs text-slate-400">
-                  Synchronized from Firebase Firestore & Local Storage. Click any ticket to inspect the full transcript.
+                  Customer conversation transcripts and ticket histories.
                 </p>
               </div>
-              <div className="relative w-72">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+              <div className="relative w-64">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
                 <input
                   type="text"
                   placeholder="Search tickets..."
                   value={ticketSearch}
                   onChange={(e) => setTicketSearch(e.target.value)}
-                  className="w-full bg-slate-950/80 border border-slate-700/80 rounded-lg pl-9 pr-3 py-1.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-400"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#305EFF]"
                 />
               </div>
             </div>
 
-            <div className="border border-slate-800 rounded-xl overflow-hidden bg-slate-950/60">
+            <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-xs">
               <table className="w-full text-left text-xs">
-                <thead className="bg-slate-900/90 text-slate-400 border-b border-slate-800">
+                <thead className="bg-slate-50 text-slate-500 border-b border-slate-200">
                   <tr>
-                    <th className="py-3 px-4 font-semibold">Ticket Reference</th>
-                    <th className="py-3 px-4 font-semibold">Subject / Inquiry</th>
-                    <th className="py-3 px-4 font-semibold">Customer UID</th>
-                    <th className="py-3 px-4 font-semibold">Priority</th>
-                    <th className="py-3 px-4 font-semibold">Status</th>
-                    <th className="py-3 px-4 font-semibold">Messages</th>
-                    <th className="py-3 px-4 font-semibold">Date</th>
-                    <th className="py-3 px-4 font-semibold text-right">Actions</th>
+                    <th className="py-2.5 px-4 font-semibold">Ticket ID</th>
+                    <th className="py-2.5 px-4 font-semibold">Subject</th>
+                    <th className="py-2.5 px-4 font-semibold">Customer UID</th>
+                    <th className="py-2.5 px-4 font-semibold">Priority</th>
+                    <th className="py-2.5 px-4 font-semibold">Status</th>
+                    <th className="py-2.5 px-4 font-semibold">Messages</th>
+                    <th className="py-2.5 px-4 font-semibold">Date</th>
+                    <th className="py-2.5 px-4 font-semibold text-right">Action</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-800/80">
-                  {tickets
-                    .filter((t) =>
-                      ticketSearch
-                        ? t.subject.toLowerCase().includes(ticketSearch.toLowerCase()) ||
-                          t.id.toLowerCase().includes(ticketSearch.toLowerCase())
-                        : true
-                    )
-                    .map((ticket) => (
-                      <tr key={ticket.id} className="hover:bg-slate-900/50 transition-colors">
-                        <td className="py-3 px-4 font-mono font-bold text-amber-300">{ticket.id}</td>
-                        <td className="py-3 px-4 font-medium text-slate-200 max-w-xs truncate">
+                <tbody className="divide-y divide-slate-100 text-slate-700">
+                  {tickets.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="py-12 text-center text-slate-400">
+                        No support tickets found. Real customer tickets will appear here automatically.
+                      </td>
+                    </tr>
+                  ) : (
+                    tickets
+                      .filter((t) =>
+                        ticketSearch
+                          ? t.subject.toLowerCase().includes(ticketSearch.toLowerCase()) ||
+                            t.id.toLowerCase().includes(ticketSearch.toLowerCase())
+                          : true
+                      )
+                      .map((ticket) => (
+                      <tr key={ticket.id} className="hover:bg-slate-50/60 transition-colors">
+                        <td className="py-3 px-4 font-mono font-semibold text-slate-900">{ticket.id}</td>
+                        <td className="py-3 px-4 font-medium text-slate-800 max-w-xs truncate">
                           {ticket.subject}
                         </td>
-                        <td className="py-3 px-4 text-slate-400">{ticket.uid || "guest_user"}</td>
+                        <td className="py-3 px-4 text-slate-500">{ticket.uid || "guest_user"}</td>
                         <td className="py-3 px-4">
                           <span
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
                               ticket.priority === "High"
-                                ? "bg-rose-500/20 text-rose-300 border border-rose-500/40"
-                                : ticket.priority === "Medium"
-                                ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
-                                : "bg-slate-800 text-slate-300"
+                                ? "bg-rose-50 text-rose-700 border border-rose-200"
+                                : "bg-slate-100 text-slate-600 border border-slate-200"
                             }`}
                           >
                             {ticket.priority || "Medium"}
@@ -827,32 +867,28 @@ export function MerchantPortal({ onBackToChat, merchantEmail = "merchant@razorpa
                         </td>
                         <td className="py-3 px-4">
                           <span
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${
                               ticket.status === "Open"
-                                ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
-                                : ticket.status === "In Review"
-                                ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
-                                : "bg-slate-800 text-slate-400"
+                                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                : "bg-slate-100 text-slate-600 border border-slate-200"
                             }`}
                           >
                             {ticket.status}
                           </span>
                         </td>
-                        <td className="py-3 px-4 text-slate-300">{ticket.messages?.length || 0}</td>
+                        <td className="py-3 px-4 text-slate-500">{ticket.messages?.length || 0}</td>
                         <td className="py-3 px-4 text-slate-400">{ticket.date || "Recent"}</td>
                         <td className="py-3 px-4 text-right">
-                          <Button
-                            variant="ghost"
-                            size="sm"
+                          <button
                             onClick={() => setSelectedTicket(ticket)}
-                            className="h-7 text-xs text-indigo-300 hover:text-indigo-200 hover:bg-indigo-950/40 gap-1"
+                            className="text-xs text-[#305EFF] hover:underline font-medium cursor-pointer"
                           >
-                            <Eye className="w-3.5 h-3.5" />
                             View Transcript
-                          </Button>
+                          </button>
                         </td>
                       </tr>
-                    ))}
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -860,68 +896,68 @@ export function MerchantPortal({ onBackToChat, merchantEmail = "merchant@razorpa
         )}
 
         {/* =========================================================================
-            TAB 3: CUSTOMER CRM DIRECTORY
+            TAB 3: CUSTOMER CRM DIRECTORY (Minimal Light Mode)
             ========================================================================= */}
         {activeTab === "customers" && (
           <div className="space-y-4">
-            <div className="p-4 bg-slate-900/80 border border-slate-800 rounded-xl flex items-center justify-between">
+            <div className="p-3.5 bg-white border border-slate-200 rounded-xl flex items-center justify-between shadow-xs">
               <div>
-                <h3 className="text-sm font-bold text-white">Customer CRM Directory</h3>
+                <h3 className="text-sm font-semibold text-slate-900">Customer CRM Directory</h3>
                 <p className="text-xs text-slate-400">
-                  Aggregated customer profiles, lifetime spend, order history, and support history across all channels.
+                  Aggregated lifetime value, order frequency, and support history.
                 </p>
               </div>
-              <div className="px-3 py-1 bg-indigo-500/10 border border-indigo-500/30 rounded-lg text-xs text-indigo-300">
-                {customerDirectory.length} Unique Customer Profiles
-              </div>
+              <span className="text-xs text-slate-500 bg-slate-100 px-2.5 py-1 rounded-lg">
+                {customerDirectory.length} Customers
+              </span>
             </div>
 
-            <div className="border border-slate-800 rounded-xl overflow-hidden bg-slate-950/60">
+            <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-xs">
               <table className="w-full text-left text-xs">
-                <thead className="bg-slate-900/90 text-slate-400 border-b border-slate-800">
+                <thead className="bg-slate-50 text-slate-500 border-b border-slate-200">
                   <tr>
-                    <th className="py-3 px-4 font-semibold">Customer</th>
-                    <th className="py-3 px-4 font-semibold">Email</th>
-                    <th className="py-3 px-4 font-semibold">Contact</th>
-                    <th className="py-3 px-4 font-semibold">Total Spend</th>
-                    <th className="py-3 px-4 font-semibold">Tickets</th>
-                    <th className="py-3 px-4 font-semibold">Refund Claims</th>
-                    <th className="py-3 px-4 font-semibold">Risk Rating</th>
-                    <th className="py-3 px-4 font-semibold">Last Active</th>
+                    <th className="py-2.5 px-4 font-semibold">Customer</th>
+                    <th className="py-2.5 px-4 font-semibold">Email</th>
+                    <th className="py-2.5 px-4 font-semibold">Total Spend</th>
+                    <th className="py-2.5 px-4 font-semibold">Tickets</th>
+                    <th className="py-2.5 px-4 font-semibold">Refund Claims</th>
+                    <th className="py-2.5 px-4 font-semibold">Last Active</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-800/80">
-                  {customerDirectory.map((c, i) => (
-                    <tr key={i} className="hover:bg-slate-900/50 transition-colors">
-                      <td className="py-3 px-4 font-medium text-white flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-indigo-500 to-sky-400 text-white flex items-center justify-center font-bold text-[10px]">
+                <tbody className="divide-y divide-slate-100 text-slate-700">
+                  {customerDirectory.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="py-12 text-center text-slate-400">
+                        No customer profiles recorded yet. Profiles will aggregate automatically from active orders and tickets.
+                      </td>
+                    </tr>
+                  ) : (
+                    customerDirectory.map((c, i) => (
+                    <tr key={i} className="hover:bg-slate-50/60 transition-colors">
+                      <td className="py-3 px-4 font-medium text-slate-900 flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-full bg-slate-100 text-slate-700 flex items-center justify-center font-bold text-[10px]">
                           {c.name.slice(0, 2).toUpperCase()}
                         </div>
                         {c.name}
                       </td>
-                      <td className="py-3 px-4 text-slate-300 font-mono text-[11px]">{c.email}</td>
-                      <td className="py-3 px-4 text-slate-400">{c.contact || "+91 98XXX XXXXX"}</td>
-                      <td className="py-3 px-4 font-bold text-emerald-400">
+                      <td className="py-3 px-4 text-slate-500 font-mono text-[11px]">{c.email}</td>
+                      <td className="py-3 px-4 font-semibold text-slate-900">
                         {c.totalSpend > 0 ? formatINR(c.totalSpend * 100) : "₹0.00"}
                       </td>
-                      <td className="py-3 px-4 text-slate-300">{c.ticketsCount}</td>
+                      <td className="py-3 px-4 text-slate-600">{c.ticketsCount}</td>
                       <td className="py-3 px-4">
                         {c.claimsCount > 0 ? (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
                             {c.claimsCount} Claim{c.claimsCount > 1 ? "s" : ""}
                           </span>
                         ) : (
-                          <span className="text-slate-500">0</span>
+                          <span className="text-slate-400">0</span>
                         )}
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
-                          Low Risk
-                        </span>
                       </td>
                       <td className="py-3 px-4 text-slate-400">{c.lastActive}</td>
                     </tr>
-                  ))}
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -929,60 +965,58 @@ export function MerchantPortal({ onBackToChat, merchantEmail = "merchant@razorpa
         )}
 
         {/* =========================================================================
-            TAB 4: LIVE RAZORPAY PAYMENTS & ORDERS
+            TAB 4: LIVE PAYMENTS & ORDERS (Minimal Light Mode)
             ========================================================================= */}
         {activeTab === "payments" && (
           <div className="space-y-6">
-            {/* Live Payments Table */}
-            <div className="space-y-3">
+            <div className="space-y-2.5">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <CreditCard className="w-4 h-4 text-indigo-400" />
-                  <h3 className="text-sm font-bold text-white">Live Razorpay Payments</h3>
-                  <span className="text-xs text-slate-400">({payments.length} retrieved via MCP)</span>
+                  <CreditCard className="w-4 h-4 text-slate-700" />
+                  <h3 className="text-sm font-semibold text-slate-900">Live Razorpay Payments</h3>
+                  <span className="text-xs text-slate-400">({payments.length})</span>
                 </div>
-                <div className="text-xs text-slate-400">Direct Gateway Sync</div>
               </div>
 
-              <div className="border border-slate-800 rounded-xl overflow-hidden bg-slate-950/60">
+              <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-xs">
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-900/90 text-slate-400 border-b border-slate-800">
+                  <thead className="bg-slate-50 text-slate-500 border-b border-slate-200">
                     <tr>
-                      <th className="py-3 px-4 font-semibold">Payment ID</th>
-                      <th className="py-3 px-4 font-semibold">Amount</th>
-                      <th className="py-3 px-4 font-semibold">Status</th>
-                      <th className="py-3 px-4 font-semibold">Method</th>
-                      <th className="py-3 px-4 font-semibold">Customer Email</th>
-                      <th className="py-3 px-4 font-semibold">Created At</th>
+                      <th className="py-2.5 px-4 font-semibold">Payment ID</th>
+                      <th className="py-2.5 px-4 font-semibold">Amount</th>
+                      <th className="py-2.5 px-4 font-semibold">Status</th>
+                      <th className="py-2.5 px-4 font-semibold">Method</th>
+                      <th className="py-2.5 px-4 font-semibold">Customer Email</th>
+                      <th className="py-2.5 px-4 font-semibold">Date</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-800/80">
+                  <tbody className="divide-y divide-slate-100 text-slate-700">
                     {payments.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="py-6 text-center text-slate-500">
-                          No recent payments recorded on this merchant key.
+                        <td colSpan={6} className="py-6 text-center text-slate-400">
+                          No recent payments recorded.
                         </td>
                       </tr>
                     ) : (
                       payments.map((p) => (
-                        <tr key={p.id} className="hover:bg-slate-900/50 transition-colors">
-                          <td className="py-3 px-4 font-mono font-bold text-indigo-300">{p.id}</td>
-                          <td className="py-3 px-4 font-bold text-white">{p.amount_formatted}</td>
+                        <tr key={p.id} className="hover:bg-slate-50/60 transition-colors">
+                          <td className="py-3 px-4 font-mono font-medium text-slate-900">{p.id}</td>
+                          <td className="py-3 px-4 font-semibold text-slate-900">{p.amount_formatted}</td>
                           <td className="py-3 px-4">
                             <span
-                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${
                                 p.status === "captured"
-                                  ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                                   : p.status === "refunded"
-                                  ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
-                                  : "bg-rose-500/20 text-rose-300 border border-rose-500/40"
+                                  ? "bg-amber-50 text-amber-700 border border-amber-200"
+                                  : "bg-rose-50 text-rose-700 border border-rose-200"
                               }`}
                             >
                               {p.status}
                             </span>
                           </td>
-                          <td className="py-3 px-4 text-slate-300 uppercase">{p.method || "UPI"}</td>
-                          <td className="py-3 px-4 text-slate-400 font-mono text-[11px]">{p.email || "—"}</td>
+                          <td className="py-3 px-4 text-slate-500 uppercase">{p.method || "UPI"}</td>
+                          <td className="py-3 px-4 text-slate-500 font-mono text-[11px]">{p.email || "—"}</td>
                           <td className="py-3 px-4 text-slate-400">{p.created_at}</td>
                         </tr>
                       ))
@@ -992,53 +1026,52 @@ export function MerchantPortal({ onBackToChat, merchantEmail = "merchant@razorpa
               </div>
             </div>
 
-            {/* Live Orders Table */}
-            <div className="space-y-3">
+            <div className="space-y-2.5">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Receipt className="w-4 h-4 text-sky-400" />
-                  <h3 className="text-sm font-bold text-white">Live Razorpay Orders</h3>
-                  <span className="text-xs text-slate-400">({orders.length} retrieved via MCP)</span>
+                  <Receipt className="w-4 h-4 text-slate-700" />
+                  <h3 className="text-sm font-semibold text-slate-900">Live Razorpay Orders</h3>
+                  <span className="text-xs text-slate-400">({orders.length})</span>
                 </div>
               </div>
 
-              <div className="border border-slate-800 rounded-xl overflow-hidden bg-slate-950/60">
+              <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-xs">
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-900/90 text-slate-400 border-b border-slate-800">
+                  <thead className="bg-slate-50 text-slate-500 border-b border-slate-200">
                     <tr>
-                      <th className="py-3 px-4 font-semibold">Order ID</th>
-                      <th className="py-3 px-4 font-semibold">Total Amount</th>
-                      <th className="py-3 px-4 font-semibold">Amount Paid</th>
-                      <th className="py-3 px-4 font-semibold">Status</th>
-                      <th className="py-3 px-4 font-semibold">Receipt</th>
-                      <th className="py-3 px-4 font-semibold">Created At</th>
+                      <th className="py-2.5 px-4 font-semibold">Order ID</th>
+                      <th className="py-2.5 px-4 font-semibold">Total Amount</th>
+                      <th className="py-2.5 px-4 font-semibold">Amount Paid</th>
+                      <th className="py-2.5 px-4 font-semibold">Status</th>
+                      <th className="py-2.5 px-4 font-semibold">Receipt</th>
+                      <th className="py-2.5 px-4 font-semibold">Date</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-800/80">
+                  <tbody className="divide-y divide-slate-100 text-slate-700">
                     {orders.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="py-6 text-center text-slate-500">
+                        <td colSpan={6} className="py-6 text-center text-slate-400">
                           No recent orders recorded.
                         </td>
                       </tr>
                     ) : (
                       orders.map((o) => (
-                        <tr key={o.id} className="hover:bg-slate-900/50 transition-colors">
-                          <td className="py-3 px-4 font-mono font-bold text-sky-300">{o.id}</td>
-                          <td className="py-3 px-4 font-bold text-white">{o.amount_formatted}</td>
-                          <td className="py-3 px-4 text-emerald-400 font-semibold">{o.amount_paid_formatted}</td>
+                        <tr key={o.id} className="hover:bg-slate-50/60 transition-colors">
+                          <td className="py-3 px-4 font-mono font-medium text-slate-900">{o.id}</td>
+                          <td className="py-3 px-4 font-semibold text-slate-900">{o.amount_formatted}</td>
+                          <td className="py-3 px-4 text-slate-600">{o.amount_paid_formatted}</td>
                           <td className="py-3 px-4">
                             <span
-                              className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${
                                 o.status === "paid"
-                                  ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
-                                  : "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                  : "bg-slate-100 text-slate-600 border border-slate-200"
                               }`}
                             >
                               {o.status}
                             </span>
                           </td>
-                          <td className="py-3 px-4 text-slate-400 font-mono text-[11px]">{o.receipt || "—"}</td>
+                          <td className="py-3 px-4 text-slate-500 font-mono text-[11px]">{o.receipt || "—"}</td>
                           <td className="py-3 px-4 text-slate-400">{o.created_at}</td>
                         </tr>
                       ))
@@ -1049,50 +1082,49 @@ export function MerchantPortal({ onBackToChat, merchantEmail = "merchant@razorpa
             </div>
           </div>
         )}
-      </div>
+        </div>
+      </main>
 
-      {/* =========================================================================
-          MODAL 1: TICKET TRANSCRIPT VIEWER MODAL
-          ========================================================================= */}
+      {/* MODAL 1: TICKET TRANSCRIPT MODAL (Light Mode) */}
       {selectedTicket && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#0f1422] border border-slate-700 rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95">
-            <div className="px-6 py-4 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
+        <div className="fixed inset-0 z-50 bg-slate-900/30 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-xl overflow-hidden animate-in zoom-in-95">
+            <div className="px-6 py-4 bg-white border-b border-slate-100 flex items-center justify-between">
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="font-mono text-xs font-bold text-amber-300 bg-slate-800 px-2 py-0.5 rounded">
+                  <span className="font-mono text-xs font-semibold text-slate-800 bg-slate-100 px-2 py-0.5 rounded">
                     {selectedTicket.id}
                   </span>
-                  <h3 className="font-bold text-sm text-white">{selectedTicket.subject}</h3>
+                  <h3 className="font-semibold text-sm text-slate-900">{selectedTicket.subject}</h3>
                 </div>
-                <div className="text-xs text-slate-400 mt-1">
-                  Customer: <strong className="text-slate-200">{selectedTicket.uid}</strong> • Status: {selectedTicket.status}
+                <div className="text-xs text-slate-400 mt-0.5">
+                  Customer: {selectedTicket.uid} • Status: {selectedTicket.status}
                 </div>
               </div>
               <button
                 onClick={() => setSelectedTicket(null)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-950/50">
+            <div className="flex-1 overflow-y-auto p-6 space-y-3 bg-slate-50/50">
               {selectedTicket.messages?.map((msg, i) => (
                 <div
                   key={i}
                   className={`flex flex-col ${msg.isUser ? "items-end" : "items-start"}`}
                 >
-                  <div className="text-[10px] text-slate-500 mb-1 flex items-center gap-1.5">
-                    <span>{msg.isUser ? "Customer" : "Razorpay AI Agent"}</span>
+                  <div className="text-[10px] text-slate-400 mb-1 flex items-center gap-1">
+                    <span>{msg.isUser ? "Customer" : "Razorpay AI"}</span>
                     <span>•</span>
                     <span>{msg.timestamp}</span>
                   </div>
                   <div
-                    className={`max-w-[85%] rounded-xl px-4 py-2.5 text-xs leading-relaxed ${
+                    className={`max-w-[85%] rounded-xl px-3.5 py-2 text-xs leading-relaxed ${
                       msg.isUser
-                        ? "bg-indigo-600 text-white font-normal"
-                        : "bg-slate-900 border border-slate-800 text-slate-200"
+                        ? "bg-[#305EFF] text-white"
+                        : "bg-white border border-slate-200 text-slate-800 shadow-xs"
                     }`}
                   >
                     {msg.text}
@@ -1101,185 +1133,157 @@ export function MerchantPortal({ onBackToChat, merchantEmail = "merchant@razorpa
               ))}
             </div>
 
-            <div className="px-6 py-3 bg-slate-900 border-t border-slate-800 flex items-center justify-between">
-              <span className="text-xs text-slate-400">Total {selectedTicket.messages?.length || 0} messages in thread</span>
-              <Button
-                size="sm"
-                variant="outline"
+            <div className="px-6 py-3 bg-white border-t border-slate-100 flex items-center justify-between">
+              <span className="text-xs text-slate-400">{selectedTicket.messages?.length || 0} messages</span>
+              <button
                 onClick={() => setSelectedTicket(null)}
-                className="border-slate-700 bg-slate-800 text-slate-300 text-xs h-8"
+                className="border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs h-8 px-3 rounded-lg cursor-pointer"
               >
-                Close Transcript
-              </Button>
+                Close
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* =========================================================================
-          MODAL 2: EVIDENCE INSPECTION LIGHTBOX
-          ========================================================================= */}
+      {/* MODAL 2: EVIDENCE INSPECTION LIGHTBOX (Light Mode) */}
       {previewEvidence && (
-        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-6">
-          <div className="bg-[#0f1422] border border-slate-700 rounded-2xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden shadow-2xl animate-in zoom-in-95">
-            <div className="px-6 py-3.5 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-6">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden shadow-xl animate-in zoom-in-95">
+            <div className="px-6 py-3.5 bg-white border-b border-slate-100 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <FileText className="w-4 h-4 text-amber-400" />
-                <h3 className="font-bold text-sm text-white">{previewEvidence.name}</h3>
-                <span className="text-xs text-slate-400">({previewEvidence.size || "120 KB"})</span>
+                <FileText className="w-4 h-4 text-slate-500" />
+                <h3 className="font-semibold text-sm text-slate-900">{previewEvidence.name}</h3>
               </div>
               <button
                 onClick={() => setPreviewEvidence(null)}
-                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6 flex items-center justify-center bg-slate-950">
+            <div className="flex-1 overflow-y-auto p-6 flex items-center justify-center bg-slate-50">
               {previewEvidence.previewUrl ? (
                 <img
                   src={previewEvidence.previewUrl}
                   alt={previewEvidence.name}
-                  className="max-h-[60vh] max-w-full rounded-lg border border-slate-800 object-contain shadow-xl"
+                  className="max-h-[60vh] max-w-full rounded-lg border border-slate-200 object-contain shadow-sm"
                 />
               ) : previewEvidence.content ? (
-                <div className="w-full p-4 bg-slate-900 rounded-lg border border-slate-800 font-mono text-xs text-slate-200 whitespace-pre-wrap">
+                <div className="w-full p-4 bg-white rounded-lg border border-slate-200 font-mono text-xs text-slate-800 whitespace-pre-wrap">
                   {previewEvidence.content}
                 </div>
               ) : (
-                <div className="text-center p-8 text-slate-400">
-                  <FileText className="w-12 h-12 mx-auto text-slate-600 mb-2" />
-                  <p className="text-sm font-medium">Document verified by Gemini OCR</p>
-                  <p className="text-xs text-slate-500 mt-1">
-                    Receipt matches damage claim details and order payment hash.
-                  </p>
+                <div className="text-center p-8 text-slate-500">
+                  <FileText className="w-10 h-10 mx-auto text-slate-400 mb-2" />
+                  <p className="text-xs">Document verified by Autonomous OCR.</p>
                 </div>
               )}
             </div>
 
-            <div className="px-6 py-3 bg-slate-900 border-t border-slate-800 flex items-center justify-between">
-              <span className="text-xs text-emerald-400 flex items-center gap-1.5">
-                <CheckCircle className="w-3.5 h-3.5" /> Evidence Verified by Autonomous AI
-              </span>
-              <Button
-                size="sm"
-                variant="outline"
+            <div className="px-6 py-3 bg-white border-t border-slate-100 flex items-center justify-end">
+              <button
                 onClick={() => setPreviewEvidence(null)}
-                className="border-slate-700 bg-slate-800 text-slate-200 text-xs h-8"
+                className="border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs h-8 px-3 rounded-lg cursor-pointer"
               >
-                Close Preview
-              </Button>
+                Close
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* =========================================================================
-          MODAL 3: FULL CLAIM AUDIT TRAIL MODAL
-          ========================================================================= */}
+      {/* MODAL 3: FULL CLAIM AUDIT TRAIL MODAL (Light Mode) */}
       {selectedClaim && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#0f1422] border border-slate-700 rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95">
-            <div className="px-6 py-4 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
+        <div className="fixed inset-0 z-50 bg-slate-900/30 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-xl max-h-[85vh] flex flex-col shadow-xl overflow-hidden animate-in zoom-in-95">
+            <div className="px-6 py-4 bg-white border-b border-slate-100 flex items-center justify-between">
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="font-mono text-xs font-bold text-amber-300 bg-slate-800 px-2.5 py-0.5 rounded">
+                  <span className="font-mono text-xs font-semibold text-slate-800 bg-slate-100 px-2 py-0.5 rounded">
                     {selectedClaim.claimId}
                   </span>
-                  <h3 className="font-bold text-sm text-white">Full Claim Dossier & Telemetry</h3>
-                </div>
-                <div className="text-xs text-slate-400 mt-0.5">
-                  Razorpay Live Payment: <code className="text-indigo-300">{selectedClaim.paymentId}</code>
+                  <h3 className="font-semibold text-sm text-slate-900">Claim Audit Trail</h3>
                 </div>
               </div>
               <button
                 onClick={() => setSelectedClaim(null)}
-                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-950/50 text-xs">
-              <div className="grid grid-cols-2 gap-3 p-3 bg-slate-900/60 rounded-xl border border-slate-800">
+            <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-white text-xs">
+              <div className="grid grid-cols-2 gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
                 <div>
-                  <span className="text-slate-500">Customer Name:</span>
-                  <div className="font-semibold text-slate-200">{selectedClaim.customerName}</div>
+                  <span className="text-slate-400 text-[11px]">Customer:</span>
+                  <div className="font-medium text-slate-800">{selectedClaim.customerName}</div>
                 </div>
                 <div>
-                  <span className="text-slate-500">Customer Email:</span>
-                  <div className="font-semibold text-slate-200">{selectedClaim.customerEmail}</div>
+                  <span className="text-slate-400 text-[11px]">Email:</span>
+                  <div className="font-medium text-slate-800">{selectedClaim.customerEmail}</div>
                 </div>
                 <div>
-                  <span className="text-slate-500">Claim Amount:</span>
-                  <div className="font-bold text-emerald-400 text-sm">{selectedClaim.amountFormatted}</div>
+                  <span className="text-slate-400 text-[11px]">Amount:</span>
+                  <div className="font-bold text-slate-900">{selectedClaim.amountFormatted}</div>
                 </div>
                 <div>
-                  <span className="text-slate-500">Current Status:</span>
-                  <div className="font-semibold text-amber-300">{selectedClaim.status}</div>
+                  <span className="text-slate-400 text-[11px]">Status:</span>
+                  <div className="font-medium text-amber-700">{selectedClaim.status}</div>
                 </div>
               </div>
 
               <div>
-                <h4 className="font-bold text-slate-200 mb-1">Customer Stated Reason:</h4>
-                <div className="p-3 bg-slate-900/70 border border-slate-800 rounded-lg text-slate-300">
+                <h4 className="font-semibold text-slate-800 mb-1">Customer Reason:</h4>
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-700">
                   {selectedClaim.reason}
-                  {selectedClaim.customerNotes && (
-                    <div className="mt-2 text-slate-400 text-[11px] border-t border-slate-800 pt-1.5">
-                      Notes: {selectedClaim.customerNotes}
-                    </div>
-                  )}
                 </div>
               </div>
 
               <div>
-                <h4 className="font-bold text-slate-200 mb-1">Full AI Investigation Telemetry:</h4>
-                <pre className="p-3 bg-slate-900 border border-slate-800 rounded-lg font-mono text-[11px] text-indigo-200 overflow-x-auto">
+                <h4 className="font-semibold text-slate-800 mb-1">AI Telemetry Data:</h4>
+                <pre className="p-3 bg-slate-50 border border-slate-200 rounded-lg font-mono text-[11px] text-slate-700 overflow-x-auto">
                   {JSON.stringify(selectedClaim.aiInvestigation, null, 2)}
                 </pre>
               </div>
 
               {selectedClaim.status === "Pending Vendor Decision" && (
-                <div className="p-3 bg-amber-950/30 border border-amber-500/30 rounded-lg space-y-2">
-                  <div className="font-semibold text-amber-300">Take Vendor Action:</div>
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-2">
+                  <div className="font-medium text-slate-800">Action:</div>
                   <input
                     type="text"
-                    placeholder="Optional vendor decision note (e.g. Approved per photo verification)..."
+                    placeholder="Optional settlement note..."
                     value={actionNote}
                     onChange={(e) => setActionNote(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none"
+                    className="w-full bg-white border border-slate-200 rounded px-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#305EFF]"
                   />
                   <div className="flex items-center gap-2 pt-1 justify-end">
-                    <Button
-                      size="sm"
-                      variant="outline"
+                    <button
                       onClick={() => handleSettle(selectedClaim.claimId, "reject")}
-                      className="border-rose-800/80 bg-rose-950/40 text-rose-300 text-xs h-8"
+                      className="border border-rose-200 bg-white hover:bg-rose-50 text-rose-600 text-xs h-8 px-3 rounded-lg cursor-pointer"
                     >
                       Reject
-                    </Button>
-                    <Button
-                      size="sm"
+                    </button>
+                    <button
                       onClick={() => handleSettle(selectedClaim.claimId, "approve")}
-                      className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs h-8"
+                      className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs h-8 px-4 rounded-lg font-medium cursor-pointer"
                     >
-                      Approve & Settle Now
-                    </Button>
+                      Approve Refund
+                    </button>
                   </div>
                 </div>
               )}
             </div>
 
-            <div className="px-6 py-3 bg-slate-900 border-t border-slate-800 flex justify-end">
-              <Button
-                size="sm"
-                variant="outline"
+            <div className="px-6 py-3 bg-white border-t border-slate-100 flex justify-end">
+              <button
                 onClick={() => setSelectedClaim(null)}
-                className="border-slate-700 bg-slate-800 text-slate-200 text-xs h-8"
+                className="border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs h-8 px-3 rounded-lg cursor-pointer"
               >
-                Close Dossier
-              </Button>
+                Close
+              </button>
             </div>
           </div>
         </div>

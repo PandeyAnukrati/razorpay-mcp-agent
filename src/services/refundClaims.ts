@@ -57,111 +57,25 @@ export interface RefundClaim {
 
 const STORAGE_KEY = "rzp_refund_claims"
 
-/**
- * Seed initial claims for demo and testing
- */
-const SEEDED_CLAIMS: RefundClaim[] = [
-  {
-    claimId: "REF-CLAIM-8392",
-    paymentId: "pay_TYLbzTtDsBE2o0",
-    orderId: "order_TYLbFFXmszuIQa",
-    amount: 5000,
-    amountFormatted: "₹5,000.00",
-    customerName: "Aryan Sharma",
-    customerEmail: "aryan.sharma@example.com",
-    customerContact: "+919876543210",
-    reason: "Defective Electronics Delivery & Damaged Packaging",
-    customerNotes:
-      "Received package in broken condition, item does not power on. Attached photo of box and courier slip.",
-    attachedDocs: [
-      {
-        name: "courier_damage_receipt.pdf",
-        type: "pdf",
-        size: "142 KB",
-        content: "Courier Delivery Inspection Slip #BL-9920 - Box crushed on side. Customer refused open box delivery.",
-      },
-      {
-        name: "damaged_device_photo.jpg",
-        type: "image",
-        size: "820 KB",
-        previewUrl: "https://images.unsplash.com/photo-1598327105666-5b89351aff97?w=600&auto=format&fit=crop&q=60",
-      },
-    ],
-    status: "Pending Vendor Decision",
-    aiInvestigation: {
-      validityScore: 94,
-      riskLevel: "Low",
-      summary:
-        "Payment pay_TYLbzTtDsBE2o0 (₹5,000.00) is fully captured via UPI. Attached courier receipt confirms physical carton damage at transit. Transaction is within the 14-day merchant policy window.",
-      recommendation:
-        "Approve 100% refund. Evidence is consistent with logistics damage report.",
-      escalationReason:
-        "Transaction value (₹5,000.00) exceeds automated instant refund ceiling (> ₹1,000). Forwarded for Vendor Senior Manager authorization.",
-      policyCompliance: {
-        paymentCaptured: true,
-        withinPolicyWindow: true,
-        evidenceVerified: true,
-        chargebackRisk: "Low",
-      },
-    },
-    createdAt: new Date(Date.now() - 3600000).toLocaleString(),
-    updatedAt: new Date(Date.now() - 3600000).toLocaleString(),
-  },
-  {
-    claimId: "REF-CLAIM-7421",
-    paymentId: "pay_TXG004_settled",
-    orderId: "order_TXG_8829",
-    amount: 2499,
-    amountFormatted: "₹2,499.00",
-    customerName: "Pooja Mehta",
-    customerEmail: "pooja.mehta@example.com",
-    reason: "Duplicate Billing on UPI checkout",
-    customerNotes: "My bank deducted amount twice during checkout timeout.",
-    attachedDocs: [
-      {
-        name: "bank_statement_snippet.pdf",
-        type: "pdf",
-        size: "95 KB",
-        content: "HDFC Bank Statement - Two consecutive debits of ₹2,499.00 at 14:02:11 and 14:02:44.",
-      },
-    ],
-    status: "Pending Vendor Decision",
-    aiInvestigation: {
-      validityScore: 88,
-      riskLevel: "Low",
-      summary:
-        "Verified duplicate charge pattern. Customer statement displays dual debits within 33 seconds. One captured transaction on merchant gateway.",
-      recommendation:
-        "Approve full refund of duplicate charge to prevent chargeback.",
-      escalationReason:
-        "High-value claim requires merchant confirmation against ledger.",
-      policyCompliance: {
-        paymentCaptured: true,
-        withinPolicyWindow: true,
-        evidenceVerified: true,
-        chargebackRisk: "Medium",
-      },
-    },
-    createdAt: new Date(Date.now() - 7200000).toLocaleString(),
-    updatedAt: new Date(Date.now() - 7200000).toLocaleString(),
-  },
-]
+const MOCK_CLAIM_IDS = new Set(["REF-CLAIM-8392", "REF-CLAIM-7421"])
 
 export function getRefundClaims(): RefundClaim[] {
-  if (typeof window === "undefined") return SEEDED_CLAIMS
+  if (typeof window === "undefined") return []
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (raw) {
       const parsed = JSON.parse(raw)
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed
+      if (Array.isArray(parsed)) {
+        // Strip out any legacy seeded mock claims
+        const realClaims = parsed.filter((c: any) => !MOCK_CLAIM_IDS.has(c?.claimId))
+        if (realClaims.length !== parsed.length) {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(realClaims))
+        }
+        return realClaims
+      }
     }
   } catch {}
-
-  // Initialize with seeded claims
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(SEEDED_CLAIMS))
-  } catch {}
-  return SEEDED_CLAIMS
+  return []
 }
 
 export function saveRefundClaim(claim: RefundClaim): void {
