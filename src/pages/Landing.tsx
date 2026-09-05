@@ -11,7 +11,7 @@ export function Landing() {
   // Merchant Login Modal state
   const [isMerchantModalOpen, setIsMerchantModalOpen] = useState(false)
   const [merchantEmail, setMerchantEmail] = useState("merchant@razorpay.com")
-  const [merchantPassword, setMerchantPassword] = useState("SuperMerchant2026!")
+  const [merchantPassword, setMerchantPassword] = useState("Merchant2026!")
   const [errorMsg, setErrorMsg] = useState("")
 
   useEffect(() => {
@@ -86,7 +86,7 @@ export function Landing() {
           />
         </div>
 
-        {/* TOP RIGHT: Prominent Super Merchant Login Button */}
+        {/* TOP RIGHT: Prominent Merchant Login Button */}
         <div className="flex items-center gap-3">
           <Button
             onClick={() => setIsMerchantModalOpen(true)}
@@ -94,9 +94,6 @@ export function Landing() {
           >
             <Building2 className="h-4 w-4 text-amber-500" />
             <span className="font-bold">👑 Merchant Login</span>
-            <span className="hidden sm:inline-block px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-amber-500/15 text-amber-600 dark:text-amber-300 border border-amber-500/30">
-              Super Merchant
-            </span>
           </Button>
         </div>
       </header>
@@ -133,12 +130,12 @@ export function Landing() {
             className="w-full sm:w-auto h-13 px-6 rounded-2xl border-amber-500/40 bg-amber-500/5 hover:bg-amber-500/15 text-amber-600 dark:text-amber-400 font-semibold text-sm transition-all duration-300 cursor-pointer"
           >
             <Building2 className="mr-2 h-4 w-4 text-amber-500" />
-            Super Merchant Portal Access
+            Merchant Portal Access
           </Button>
         </div>
       </div>
 
-      {/* SUPER MERCHANT LOGIN MODAL */}
+      {/* MERCHANT LOGIN MODAL */}
       {isMerchantModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fade">
           <div className="bg-[#0f1422] border border-slate-700/80 rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden text-slate-100 animate-in zoom-in-95">
@@ -150,7 +147,7 @@ export function Landing() {
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h3 className="text-base font-bold text-white">Super Merchant Portal</h3>
+                    <h3 className="text-base font-bold text-white">Merchant Portal</h3>
                     <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
                       Enterprise Tier
                     </span>
@@ -173,11 +170,11 @@ export function Landing() {
 
             {/* Modal Body */}
             <div className="p-6 space-y-5">
-              {/* Seeded Super Merchant Credentials Callout */}
+              {/* Seeded Merchant Credentials Callout */}
               <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-indigo-500/10 to-slate-900 border border-amber-500/30 space-y-2.5">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
-                    👑 Seeded Super Merchant Credentials
+                    👑 Seeded Merchant Credentials
                   </span>
                   <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500/20 text-amber-200 font-mono">
                     Pre-configured
@@ -190,7 +187,7 @@ export function Landing() {
                   </div>
                   <div>
                     <span className="text-slate-500 text-[10px] block">Password:</span>
-                    <strong className="text-slate-200">SuperMerchant2026!</strong>
+                    <strong className="text-slate-200">Merchant2026!</strong>
                   </div>
                 </div>
 
@@ -201,7 +198,7 @@ export function Landing() {
                   className="w-full h-11 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs shadow-lg shadow-amber-500/20 gap-2 mt-1 cursor-pointer"
                 >
                   <Zap className="w-4 h-4 text-slate-950 fill-current" />
-                  ⚡ 1-Click Quick-Login as Super Merchant
+                  ⚡ 1-Click Quick-Login as Merchant
                 </Button>
               </div>
 

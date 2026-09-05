@@ -226,7 +226,7 @@ export async function getAllChatSessions(): Promise<ChatSession[]> {
           },
           {
             id: "m2",
-            text: "Claim REF-CLAIM-8392 registered and escalated to Super Merchant Portal for review.",
+            text: "Claim REF-CLAIM-8392 registered and escalated to Merchant Portal for review.",
             isUser: false,
             timestamp: "Yesterday",
           },

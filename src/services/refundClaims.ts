@@ -260,7 +260,7 @@ export async function settleRefundClaim(
         notes: {
           claimId: claim.claimId,
           reason: claim.reason,
-          vendorNotes: vendorNotes || "Approved via Super Merchant Escalation Desk",
+          vendorNotes: vendorNotes || "Approved via Merchant Escalation Desk",
         },
       })
       if (res && res.id) {

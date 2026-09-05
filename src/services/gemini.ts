@@ -157,7 +157,7 @@ const RAZORPAY_TOOL_DECLARATIONS = [
   {
     name: "investigate_and_escalate_refund",
     description:
-      "Autonomous AI Refund Claim Investigator: Evaluates a customer refund request against payment status, customer-attached evidence documents, and merchant return policies. If the claim amount is high-value (> ₹1,000) or requires merchant sign-off, synthesizes an Escalation Claim Dossier with an AI validity score (0-100), policy checks, and forwards it to the Super Merchant Portal for final human settlement.",
+      "Autonomous AI Refund Claim Investigator: Evaluates a customer refund request against payment status, customer-attached evidence documents, and merchant return policies. If the claim amount is high-value (> ₹1,000) or requires merchant sign-off, synthesizes an Escalation Claim Dossier with an AI validity score (0-100), policy checks, and forwards it to the Merchant Portal for final human settlement.",
     parameters: {
       type: "object",
       properties: {
@@ -286,7 +286,7 @@ async function executeRazorpayTool(
         recommendation: claim.aiInvestigation.recommendation,
         escalation_reason: claim.aiInvestigation.escalationReason,
         vendor_portal_synced: true,
-        message: `Claim ${claim.claimId} registered. Full AI Dossier and customer evidence dispatched to Super Merchant Portal for authorization.`,
+        message: `Claim ${claim.claimId} registered. Full AI Dossier and customer evidence dispatched to Merchant Portal for authorization.`,
       }
     }
 
@@ -428,7 +428,7 @@ You have real-time autonomous access to live Razorpay tools:
 - 'get_refund_status': Check refund records, speed (normal/instant), and ARN numbers.
 - 'get_settlements_info': View merchant payout settlement batches, UTR reference numbers, and bank deposit status.
 - 'get_disputes_info': Check customer chargebacks, dispute phase, evidence deadlines, and contest status.
-- 'investigate_and_escalate_refund': Autonomous AI refund investigation engine. Evaluates transaction status, customer evidence/receipts/photos, and policy rules. For claims exceeding ₹1,000 or requiring merchant review, generates an Escalation Dossier and dispatches it to the Super Merchant Portal.
+- 'investigate_and_escalate_refund': Autonomous AI refund investigation engine. Evaluates transaction status, customer evidence/receipts/photos, and policy rules. For claims exceeding ₹1,000 or requiring merchant review, generates an Escalation Dossier and dispatches it to the Merchant Portal.
 
 OPERATIONAL RULES & PROTOCOL:
 1. TOOL CALLING:
@@ -451,7 +451,7 @@ OPERATIONAL RULES & PROTOCOL:
           | **Amount** | **₹X,XXX.00** |
           | **AI Validity Score** | 🛡️ **XX% (High Validity)** |
           | **Risk Level** | 🟢 Low Risk |
-          | **Escalation Status** | ⏳ Forwarded to Super Merchant Portal for Sign-Off |
+          | **Escalation Status** | ⏳ Forwarded to Merchant Portal for Sign-Off |
         - Inform the customer that their claim and evidence have been sent to the vendor's escalation desk, and they will receive an immediate confirmation once approved!
 
 3. PAYMENT LINKS & UPI QR CODES:

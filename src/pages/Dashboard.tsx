@@ -112,7 +112,7 @@ export function Dashboard() {
   })
   const [isMerchantModalOpen, setIsMerchantModalOpen] = useState<boolean>(false)
   const [loginEmailInput, setLoginEmailInput] = useState<string>("merchant@razorpay.com")
-  const [loginPasswordInput, setLoginPasswordInput] = useState<string>("SuperMerchant2026!")
+  const [loginPasswordInput, setLoginPasswordInput] = useState<string>("Merchant2026!")
   const [loginError, setLoginError] = useState<string>("")
   const [activeSessionId, setActiveSessionId] = useState<string>(() => {
     return safeStorageGet("rzp_active_session_id", "") || "CHAT-MCP-01"
@@ -1035,7 +1035,7 @@ export function Dashboard() {
             >
               <Building2 className="h-3.5 w-3.5 text-amber-400" />
               <span className="hidden lg:inline">
-                {isMerchantLoggedIn ? "👑 Super Merchant Portal" : "👑 Merchant Login"}
+                {isMerchantLoggedIn ? "👑 Merchant Portal" : "👑 Merchant Login"}
               </span>
               <span className="lg:hidden">Merchant</span>
               {isMerchantLoggedIn && (
@@ -1807,7 +1807,7 @@ export function Dashboard() {
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h3 className="text-base font-bold text-white">Super Merchant Portal</h3>
+                    <h3 className="text-base font-bold text-white">Merchant Portal</h3>
                     <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
                       Enterprise Tier
                     </span>
@@ -1830,11 +1830,11 @@ export function Dashboard() {
 
             {/* Modal Body */}
             <div className="p-6 space-y-5">
-              {/* Seeded Super Merchant Credentials Callout */}
+              {/* Seeded Merchant Credentials Callout */}
               <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-indigo-500/10 to-slate-900 border border-amber-500/30 space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
-                    👑 Seeded Super Merchant Credentials
+                    👑 Seeded Merchant Credentials
                   </span>
                   <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500/20 text-amber-200 font-mono">
                     Pre-configured
@@ -1847,7 +1847,7 @@ export function Dashboard() {
                   </div>
                   <div>
                     <span className="text-slate-500 text-[10px] block">Password:</span>
-                    <strong className="text-slate-200">SuperMerchant2026!</strong>
+                    <strong className="text-slate-200">Merchant2026!</strong>
                   </div>
                 </div>
 
@@ -1858,7 +1858,7 @@ export function Dashboard() {
                   className="w-full h-10 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs shadow-lg shadow-amber-500/20 gap-2 mt-1"
                 >
                   <Zap className="w-4 h-4 text-slate-950 fill-current" />
-                  ⚡ 1-Click Quick-Login as Super Merchant
+                  ⚡ 1-Click Quick-Login as Merchant
                 </Button>
               </div>
 

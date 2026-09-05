@@ -287,9 +287,9 @@ export function MerchantPortal({ onBackToChat, merchantEmail = "merchant@razorpa
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-bold text-sm tracking-tight text-white">Razorpay Super Merchant Portal</span>
+                <span className="font-bold text-sm tracking-tight text-white">Razorpay Merchant Portal</span>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-wide bg-amber-500/20 border border-amber-500/40 text-amber-300">
-                  👑 Super Merchant Mode
+                  👑 Merchant Mode
                 </span>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-indigo-500/15 border border-indigo-500/30 text-indigo-300">
                   Tier 1 Enterprise
@@ -718,7 +718,7 @@ export function MerchantPortal({ onBackToChat, merchantEmail = "merchant@razorpa
                             <Button
                               size="sm"
                               disabled={processingClaimId === claim.claimId}
-                              onClick={() => handleSettle(claim.claimId, "approve", "Approved by Super Merchant Escalation Desk after evidence verification")}
+                              onClick={() => handleSettle(claim.claimId, "approve", "Approved by Merchant Escalation Desk after evidence verification")}
                               className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs h-8 gap-1.5 shadow-lg shadow-emerald-600/20"
                             >
                               {processingClaimId === claim.claimId ? (
