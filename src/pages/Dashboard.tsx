@@ -38,6 +38,7 @@ import {
 } from "lucide-react"
 import { WebhookAutomationPage } from "@/components/WebhookAutomationPage"
 import { MerchantPortal } from "@/components/MerchantPortal"
+import { getRefundClaims } from "@/services/refundClaims"
 import { getWebhookEvents } from "@/services/webhookAutomation"
 import {
   getRazorpayCredentials,
@@ -268,6 +269,47 @@ export function Dashboard() {
     return () => {
       if (unsubscribeSessions) unsubscribeSessions()
       unsubscribeAuth()
+    }
+  }, [])
+
+  // Listen for real-time merchant refund approval events dispatched across tabs/components
+  useEffect(() => {
+    const handleRefundApproved = (e: any) => {
+      const detail = e.detail
+      if (!detail?.claim) return
+      const { claim, refundId } = detail
+
+      setSessions((prev) =>
+        prev.map((s) => {
+          const isTarget =
+            s.id === claim.sessionId ||
+            s.messages.some((m) => m.text?.includes(claim.claimId) || m.text?.includes(claim.paymentId))
+          if (!isTarget) return s
+
+          const alreadyHasSettledMsg = s.messages.some(
+            (m) => m.id === `msg-settled-${claim.claimId}` || (refundId && m.text.includes(refundId))
+          )
+          if (alreadyHasSettledMsg) return s
+
+          const newMsg: Message = {
+            id: `msg-settled-${claim.claimId}`,
+            text: `🎉 **Merchant Authorization Approved & Refund Issued!**\n\nThe merchant has reviewed your refund claim (**${claim.claimId}**) and authorized the settlement.\n\n| Field | Settlement Details |\n| :--- | :--- |\n| **Claim Reference** | \`${claim.claimId}\` |\n| **Refund ID** | \`${refundId}\` |\n| **Payment ID** | \`${claim.paymentId}\` |\n| **Amount** | **${claim.amountFormatted}** |\n| **Status** | 🟢 **Approved & Refunded** |\n| **Settlement Mode** | ⚡ Instant Merchant Settlement |\n\nThe amount has been reversed back to your original payment method. Thank you for your patience!`,
+            isUser: false,
+            timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          }
+
+          return {
+            ...s,
+            status: "Resolved",
+            messages: [...s.messages, newMsg],
+          }
+        })
+      )
+    }
+
+    window.addEventListener("razorpay_refund_approved", handleRefundApproved)
+    return () => {
+      window.removeEventListener("razorpay_refund_approved", handleRefundApproved)
     }
   }, [])
 
@@ -736,6 +778,16 @@ export function Dashboard() {
         if (user?.uid && agentSessionToSave) {
           saveSessionToFirebase(user.uid, agentSessionToSave).catch(console.error)
         }
+
+        if (
+          reply.includes("Forwarded to Merchant Portal") ||
+          reply.includes("dispatched directly to the merchant's escalation desk") ||
+          reply.includes("Escalation Status") ||
+          reply.includes("REF-CLAIM")
+        ) {
+          setTimeout(() => getRefundClaims(), 50)
+        }
+
         return next
       })
     } catch (err: any) {
@@ -1116,37 +1168,6 @@ export function Dashboard() {
               </div>
             </div>
 
-            {/* Card 3: Webhook Automations & Simulator */}
-            <div
-              onClick={() => {
-                setBackView("menu")
-                setCurrentView("webhooks")
-              }}
-              className="sm:col-span-2 group relative flex items-center justify-between p-6 rounded-3xl border border-amber-500/30 bg-amber-500/5 hover:border-amber-500/60 shadow-sm hover:shadow-xl hover:shadow-amber-500/5 transition-all duration-300 cursor-pointer overflow-hidden"
-            >
-              <div className="flex items-center gap-5">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-500 group-hover:scale-105 transition-transform">
-                  <Zap className="h-6 w-6" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-lg font-bold text-foreground">
-                      Razorpay Webhook Automation Engine
-                    </h3>
-                    <span className="rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-[10px] font-bold text-emerald-500 border border-emerald-500/20">
-                      Live Receiver
-                    </span>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Real-time webhook listener, HMAC SHA256 verification, and zero-human-delay AI cart recovery.
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 text-xs font-bold text-amber-600 dark:text-amber-400 shrink-0">
-                <span>Open Simulator & Feed</span>
-                <span className="group-hover:translate-x-1 transition-transform">→</span>
-              </div>
-            </div>
           </div>
         </main>
       )}

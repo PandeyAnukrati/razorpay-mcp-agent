@@ -25,6 +25,7 @@ import {
 } from "lucide-react"
 import {
   getRefundClaims,
+  syncClaimsFromSessions,
   settleRefundClaim,
   type RefundClaim,
   type AttachedEvidence,
@@ -69,13 +70,13 @@ export function MerchantPortal({ onSignOut, merchantEmail = "" }: MerchantPortal
   const loadData = async () => {
     setRefreshing(true)
     try {
-      // 1. Refund claims
-      const claimsData = getRefundClaims()
-      setClaims(claimsData)
-
-      // 2. Chat sessions / support tickets
+      // 1. Chat sessions / support tickets
       const ticketsData = await getAllChatSessions()
       setTickets(ticketsData)
+
+      // 2. Refund claims (sync with chat sessions to recover any claims discussed in chat)
+      const claimsData = syncClaimsFromSessions(ticketsData)
+      setClaims(claimsData)
 
       // 3. Live Razorpay payments
       try {
@@ -109,31 +110,81 @@ export function MerchantPortal({ onSignOut, merchantEmail = "" }: MerchantPortal
       setClaims(getRefundClaims())
     }
     window.addEventListener("razorpay_refund_approved", handleRefundEvent)
-    return () => window.removeEventListener("razorpay_refund_approved", handleRefundEvent)
+    window.addEventListener("refund_claim_updated", handleRefundEvent)
+    window.addEventListener("storage", handleRefundEvent)
+    return () => {
+      window.removeEventListener("razorpay_refund_approved", handleRefundEvent)
+      window.removeEventListener("refund_claim_updated", handleRefundEvent)
+      window.removeEventListener("storage", handleRefundEvent)
+    }
   }, [])
 
   // Handle merchant settlement decision
-  const handleSettle = async (claimId: string, action: "approve" | "reject" | "request_info", customNote?: string) => {
+  const handleSettle = async (
+    claimOrId: string | RefundClaim,
+    action: "approve" | "reject" | "request_info",
+    customNote?: string
+  ) => {
+    const targetClaim = typeof claimOrId === "object" ? claimOrId : claims.find((c) => c.claimId === claimOrId)
+    const claimId = typeof claimOrId === "object" ? claimOrId.claimId : claimOrId
     setProcessingClaimId(claimId)
+
     try {
-      const result = await settleRefundClaim(claimId, action, customNote || actionNote)
+      const result = await settleRefundClaim(targetClaim || claimId, action, customNote || actionNote)
       if (result.success) {
-        setClaims(getRefundClaims())
-        if (selectedClaim?.claimId === claimId) {
-          const updated = getRefundClaims().find((c) => c.claimId === claimId)
-          setSelectedClaim(updated || null)
+        const newStatus =
+          action === "approve"
+            ? "Approved & Refunded"
+            : action === "reject"
+            ? "Rejected"
+            : "Additional Evidence Requested"
+
+        const updatedDecision = {
+          action,
+          timestamp: new Date().toLocaleString(),
+          vendorNotes: customNote || actionNote || result.message,
+          refundId: result.refundId,
         }
+
+        // Update state in place immediately
+        setClaims((prev) =>
+          prev.map((c) =>
+            c.claimId === claimId || (targetClaim && c.claimId === targetClaim.claimId)
+              ? {
+                  ...c,
+                  status: newStatus as any,
+                  vendorDecision: updatedDecision,
+                  updatedAt: new Date().toLocaleString(),
+                }
+              : c
+          )
+        )
+
+        if (selectedClaim?.claimId === claimId || (targetClaim && selectedClaim?.claimId === targetClaim.claimId)) {
+          setSelectedClaim((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  status: newStatus as any,
+                  vendorDecision: updatedDecision,
+                  updatedAt: new Date().toLocaleString(),
+                }
+              : null
+          )
+        }
+
         setActionNote("")
         if (action === "approve") {
           showToast(
             "Refund Approved & Settled",
-            `Refund processed via Razorpay MCP. Refund ID: ${result.refundId || "rfnd_instant"}. Real-time webhook card dispatched to customer chat.`,
+            result.message ||
+              `Refund processed via Razorpay MCP. Refund ID: ${result.refundId || "rfnd_instant"}. Real-time settlement card dispatched to customer chat.`,
             "success"
           )
         } else if (action === "reject") {
-          showToast("Claim Rejected", "Claim status updated to Rejected. Customer notified.", "info")
+          showToast("Claim Rejected", "Claim status updated to Rejected. Customer notified in chat.", "info")
         } else {
-          showToast("Evidence Requested", "Request for unboxing video/invoice logged. Customer ticket updated.", "info")
+          showToast("Evidence Requested", "Request for unboxing video/invoice logged. Customer chat updated.", "info")
         }
       } else {
         showToast("Action Failed", result.error || "Could not process settlement action.", "error")
@@ -744,7 +795,7 @@ export function MerchantPortal({ onSignOut, merchantEmail = "" }: MerchantPortal
                           <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
                             <button
                               disabled={processingClaimId === claim.claimId}
-                              onClick={() => handleSettle(claim.claimId, "request_info", "Please provide additional unboxing or invoice evidence.")}
+                              onClick={() => handleSettle(claim, "request_info", "Please provide additional unboxing or invoice evidence.")}
                               className="border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs h-8 px-3 rounded-lg cursor-pointer transition-colors"
                             >
                               Request Info
@@ -752,7 +803,7 @@ export function MerchantPortal({ onSignOut, merchantEmail = "" }: MerchantPortal
 
                             <button
                               disabled={processingClaimId === claim.claimId}
-                              onClick={() => handleSettle(claim.claimId, "reject", "Claim does not meet policy criteria.")}
+                              onClick={() => handleSettle(claim, "reject", "Claim does not meet policy criteria.")}
                               className="border border-rose-200 bg-white hover:bg-rose-50 text-rose-600 text-xs h-8 px-3 rounded-lg cursor-pointer transition-colors"
                             >
                               Reject Claim
@@ -760,7 +811,7 @@ export function MerchantPortal({ onSignOut, merchantEmail = "" }: MerchantPortal
 
                             <button
                               disabled={processingClaimId === claim.claimId}
-                              onClick={() => handleSettle(claim.claimId, "approve", "Approved by Merchant Escalation Desk after evidence verification")}
+                              onClick={() => handleSettle(claim, "approve", "Approved by Merchant Escalation Desk after evidence verification")}
                               className="bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs h-8 px-4 rounded-lg shadow-xs flex items-center gap-1.5 cursor-pointer transition-colors"
                             >
                               {processingClaimId === claim.claimId ? (
@@ -1261,13 +1312,13 @@ export function MerchantPortal({ onSignOut, merchantEmail = "" }: MerchantPortal
                   />
                   <div className="flex items-center gap-2 pt-1 justify-end">
                     <button
-                      onClick={() => handleSettle(selectedClaim.claimId, "reject")}
+                      onClick={() => handleSettle(selectedClaim, "reject", actionNote)}
                       className="border border-rose-200 bg-white hover:bg-rose-50 text-rose-600 text-xs h-8 px-3 rounded-lg cursor-pointer"
                     >
                       Reject
                     </button>
                     <button
-                      onClick={() => handleSettle(selectedClaim.claimId, "approve")}
+                      onClick={() => handleSettle(selectedClaim, "approve", actionNote)}
                       className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs h-8 px-4 rounded-lg font-medium cursor-pointer"
                     >
                       Approve Refund

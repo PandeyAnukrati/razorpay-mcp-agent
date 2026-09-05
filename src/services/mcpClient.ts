@@ -21,8 +21,20 @@ export const DEFAULT_RAZORPAY_KEY_SECRET = ""
  * Get active Razorpay credentials from localStorage, Vite environment variables, or preconfigured defaults
  */
 export function getRazorpayCredentials(): RazorpayCredentials {
-  const envKeyId = import.meta.env.VITE_RAZORPAY_KEY_ID || ""
-  const envKeySecret = import.meta.env.VITE_RAZORPAY_KEY_SECRET || ""
+  let envKeyId = ""
+  let envKeySecret = ""
+  try {
+    if (typeof import.meta !== "undefined" && (import.meta as any).env) {
+      envKeyId = (import.meta as any).env.VITE_RAZORPAY_KEY_ID || ""
+      envKeySecret = (import.meta as any).env.VITE_RAZORPAY_KEY_SECRET || ""
+    }
+  } catch {}
+
+  const proc = typeof globalThis !== "undefined" ? (globalThis as any).process : undefined
+  if (!envKeyId && proc && proc.env) {
+    envKeyId = proc.env.VITE_RAZORPAY_KEY_ID || proc.env.RAZORPAY_KEY_ID || ""
+    envKeySecret = proc.env.VITE_RAZORPAY_KEY_SECRET || proc.env.RAZORPAY_KEY_SECRET || ""
+  }
 
   const storedKeyId = typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY_ID) || "" : ""
   const storedKeySecret = typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY_SECRET) || "" : ""
@@ -111,6 +123,8 @@ export async function mcpGetPayment(paymentId: string): Promise<any> {
       source: "razorpay_live_api",
       id: data.id,
       status: data.status,
+      amount: data.amount ? data.amount / 100 : undefined,
+      amount_paise: data.amount,
       amount_formatted: formatINR(data.amount),
       currency: data.currency,
       method: data.method,
@@ -122,6 +136,7 @@ export async function mcpGetPayment(paymentId: string): Promise<any> {
       error_description: data.error_description || undefined,
       refund_status: data.refund_status || undefined,
       amount_refunded: data.amount_refunded ? formatINR(data.amount_refunded) : undefined,
+      amount_refunded_paise: data.amount_refunded,
       created_at: new Date(data.created_at * 1000).toLocaleString(),
     }
   } catch (err: any) {
@@ -161,9 +176,14 @@ export async function mcpListPayments(params: {
       count: items.length,
       payments: items.map((p: any) => ({
         id: p.id,
+        amount: p.amount ? p.amount / 100 : 0,
+        amount_paise: p.amount,
         amount_formatted: formatINR(p.amount),
         currency: p.currency,
         status: p.status,
+        refund_status: p.refund_status || undefined,
+        amount_refunded: p.amount_refunded ? formatINR(p.amount_refunded) : undefined,
+        amount_refunded_paise: p.amount_refunded,
         method: p.method,
         customer_email: p.email,
         customer_contact: p.contact,
@@ -176,6 +196,71 @@ export async function mcpListPayments(params: {
   } catch (err: any) {
     return { error: err.message || "Failed to reach Razorpay API." }
   }
+}
+
+/**
+ * Resolves a payment ID on Razorpay flexibly (case-insensitively, handling OCR/typo variations),
+ * returning the canonical gateway ID and real status/amount.
+ */
+export async function mcpResolvePayment(paymentId: string): Promise<{
+  id: string
+  status?: string
+  amount?: number
+  amount_formatted?: string
+  refund_status?: string
+  isAlreadyRefunded?: boolean
+  error?: string
+}> {
+  if (!paymentId) return { id: "", error: "Missing payment ID" }
+  const cleanId = paymentId.trim()
+
+  // 1. Direct fetch with provided ID
+  const direct = await mcpGetPayment(cleanId)
+  if (!direct.error && direct.id) {
+    const isAlreadyRefunded =
+      direct.status === "refunded" ||
+      direct.refund_status === "full"
+    return {
+      id: direct.id,
+      status: direct.status,
+      amount: direct.amount,
+      amount_formatted: direct.amount_formatted,
+      refund_status: direct.refund_status,
+      isAlreadyRefunded,
+    }
+  }
+
+  // 2. Search recent payments for case-insensitive match or 0/O confusion
+  try {
+    const listRes = await mcpListPayments({ limit: 40 })
+    const items: any[] = listRes.payments || []
+    const normalizedTarget = cleanId.toLowerCase().replace(/[^a-z0-9]/g, "")
+
+    const matched = items.find((p: any) => {
+      const pNorm = (p.id || "").toLowerCase().replace(/[^a-z0-9]/g, "")
+      if (pNorm === normalizedTarget) return true
+      // Also match common OCR/transcription swap between digit 0 and letter o
+      const pFuzzy = pNorm.replace(/0/g, "o")
+      const targetFuzzy = normalizedTarget.replace(/0/g, "o")
+      return pFuzzy === targetFuzzy
+    })
+
+    if (matched) {
+      const isAlreadyRefunded =
+        matched.status === "refunded" ||
+        matched.refund_status === "full"
+      return {
+        id: matched.id,
+        status: matched.status,
+        amount: matched.amount,
+        amount_formatted: matched.amount_formatted,
+        refund_status: matched.refund_status,
+        isAlreadyRefunded,
+      }
+    }
+  } catch {}
+
+  return { id: cleanId, error: direct.error || `Payment '${cleanId}' not found on Razorpay.` }
 }
 
 /**

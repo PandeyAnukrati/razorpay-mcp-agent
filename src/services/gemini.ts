@@ -3,6 +3,7 @@ import {
   mcpListPayments,
   mcpGetOrder,
   mcpGetRefunds,
+  mcpCreateRefund,
   mcpGetSettlements,
   mcpGetDisputes,
   mcpCreatePaymentLink,
@@ -26,7 +27,14 @@ export type ChatMessage = {
 const PRIMARY_GEMINI_KEY = (import.meta.env.VITE_GEMINI_API_KEY || "").trim()
 const FALLBACK_GEMINI_KEY = "AIzaSyAtkF3Otrj9rmmcYaAlp3YUd_qf923da9Q"
 const BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
-const CANDIDATE_MODELS = ["gemini-flash-latest", "gemini-3.7-flash", "gemini-2.5-flash"]
+// Prioritize cheapest, lowest-cost Flash-Lite models with full function calling support
+const CANDIDATE_MODELS = [
+  "gemini-3.1-flash-lite",
+  "gemini-3.5-flash-lite",
+  "gemini-flash-lite-latest",
+  "gemini-3.6-flash",
+  "gemini-3.7-flash",
+]
 
 const RAZORPAY_TOOL_DECLARATIONS = [
   {
@@ -157,7 +165,7 @@ const RAZORPAY_TOOL_DECLARATIONS = [
   {
     name: "investigate_and_escalate_refund",
     description:
-      "Autonomous AI Refund Claim Investigator: Evaluates a customer refund request against payment status, customer-attached evidence documents, and merchant return policies. If the claim amount is high-value (> ₹1,000) or requires merchant sign-off, synthesizes an Escalation Claim Dossier with an AI validity score (0-100), policy checks, and forwards it to the Merchant Portal for final human settlement.",
+      "Autonomous AI Refund Claim Investigator: Execute this tool ONLY after the customer has provided proof/evidence (photos of defect/damage) and their purchase bill/invoice. Evaluates the refund request against payment status, customer-attached evidence, and merchant policies, and registers the formal Escalation Dossier in the Merchant Portal for human settlement.",
     parameters: {
       type: "object",
       properties: {
@@ -210,6 +218,34 @@ const RAZORPAY_TOOL_DECLARATIONS = [
       required: ["payment_id", "amount", "reason"],
     },
   },
+  {
+    name: "create_direct_refund",
+    description:
+      "Autonomous Direct Refund Execution: Issues an immediate, live refund directly on the Razorpay gateway for approved customer requests of amounts up to ₹1,000 (e.g. ₹500). Call this directly without escalating to the merchant when amount <= 1000 and the customer has provided the required proof/photos and purchase bill.",
+    parameters: {
+      type: "object",
+      properties: {
+        payment_id: {
+          type: "string",
+          description: "The payment ID to be refunded (e.g. pay_TYOTvsNhu1687D)",
+        },
+        amount: {
+          type: "number",
+          description: "Amount to refund in INR (e.g. 500). If omitted, full payment amount is refunded.",
+        },
+        reason: {
+          type: "string",
+          description: "Reason for the refund (e.g. Customer return with verified defect proof)",
+        },
+        speed: {
+          type: "string",
+          enum: ["optimum", "normal"],
+          description: "Refund processing speed (defaults to optimum instant refund)",
+        },
+      },
+      required: ["payment_id"],
+    },
+  },
 ]
 
 /**
@@ -258,10 +294,13 @@ async function executeRazorpayTool(
       return await mcpGetDisputes()
 
     case "investigate_and_escalate_refund": {
+      const parsedAmount = typeof args.amount === "number"
+        ? args.amount
+        : parseFloat(String(args.amount || "").replace(/[^0-9.]/g, "")) || 0
       const claim = createRefundClaim({
         paymentId: args.payment_id,
         orderId: args.order_id,
-        amount: Number(args.amount) || 0,
+        amount: parsedAmount,
         customerName: args.customer_name,
         customerEmail: args.customer_email,
         reason: args.reason,
@@ -288,6 +327,71 @@ async function executeRazorpayTool(
         vendor_portal_synced: true,
         message: `Claim ${claim.claimId} registered. Full AI Dossier and customer evidence dispatched to Merchant Portal for authorization.`,
       }
+    }
+
+    case "create_direct_refund": {
+      const parsedAmount = args.amount
+        ? typeof args.amount === "number"
+          ? args.amount
+          : parseFloat(String(args.amount).replace(/[^0-9.]/g, ""))
+        : undefined
+
+      const refundResult = await mcpCreateRefund({
+        payment_id: args.payment_id,
+        amount: parsedAmount,
+        notes: {
+          reason: args.reason || "Autonomous AI refund for low-value transaction",
+          source: "ai_autonomous_agent",
+        },
+        speed: args.speed || "optimum",
+      })
+
+      // Dispatch webhook event so customer chat and merchant UI get real-time confirmation
+      if (refundResult && !refundResult.error && refundResult.id) {
+        try {
+          const webhookPayload = {
+            event: "refund.processed",
+            entity: "event",
+            contains: ["refund", "payment"],
+            created_at: Math.floor(Date.now() / 1000),
+            payload: {
+              refund: {
+                entity: {
+                  id: refundResult.id,
+                  payment_id: args.payment_id,
+                  amount: parsedAmount ? Math.round(parsedAmount * 100) : 50000,
+                  currency: "INR",
+                  status: "processed",
+                  speed_processed: "instant",
+                  notes: { reason: args.reason },
+                },
+              },
+              payment: {
+                entity: {
+                  id: args.payment_id,
+                  amount: parsedAmount ? Math.round(parsedAmount * 100) : 50000,
+                  status: "refunded",
+                },
+              },
+            },
+          }
+          await fetch("/api/webhooks/razorpay", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(webhookPayload),
+          }).catch(() => {})
+        } catch {}
+
+        try {
+          window.dispatchEvent(
+            new CustomEvent("razorpay_refund_approved", {
+              detail: { refundId: refundResult.id, paymentId: args.payment_id },
+            })
+          )
+        } catch {}
+      }
+
+      return refundResult
     }
 
     default:
@@ -398,7 +502,7 @@ export async function getGeminiSupportResponse(
   // Format attached document evidence if provided
   let docContextPrompt = ""
   if (attachedDocs.length > 0) {
-    docContextPrompt = "\n\n### User-Attached Evidence Documents:\n"
+    docContextPrompt = `\n\n### User-Attached Evidence Documents (${attachedDocs.length} attached):\n`
     for (const doc of attachedDocs) {
       docContextPrompt += `\n--- Document: "${doc.name}" (${doc.size || "Unknown size"}) ---\n`
       if (doc.content) {
@@ -412,7 +516,10 @@ export async function getGeminiSupportResponse(
       }
     }
     docContextPrompt +=
-      "\nYou can use the details from these attached documents to analyze logs, receipts, order numbers, error codes, and customer inquiries.\n"
+      "\nEvidence documents ARE provided. You may inspect and verify these attached evidence files (photos, bills, receipts, damage slips) for the investigation.\n"
+  } else {
+    docContextPrompt =
+      "\n\n### User-Attached Evidence Documents:\n[STATUS: NO EVIDENCE OR BILL ATTACHED YET]\nIMPORTANT: If the user is reporting a defective, damaged, or wrong item, or asking for a refund, you MUST ask for evidence/photos of the defect and the purchase bill/invoice before initiating an investigation or escalation.\n"
   }
 
   const systemInstruction = {
@@ -428,7 +535,8 @@ You have real-time autonomous access to live Razorpay tools:
 - 'get_refund_status': Check refund records, speed (normal/instant), and ARN numbers.
 - 'get_settlements_info': View merchant payout settlement batches, UTR reference numbers, and bank deposit status.
 - 'get_disputes_info': Check customer chargebacks, dispute phase, evidence deadlines, and contest status.
-- 'investigate_and_escalate_refund': Autonomous AI refund investigation engine. Evaluates transaction status, customer evidence/receipts/photos, and policy rules. For claims exceeding ₹1,000 or requiring merchant review, generates an Escalation Dossier and dispatches it to the Merchant Portal.
+- 'create_direct_refund': Autonomous Instant Gateway Refund. Executes the refund directly on Razorpay for amounts up to ₹1,000 (e.g. ₹500) once defect proof and bill are provided, WITHOUT needing vendor escalation!
+- 'investigate_and_escalate_refund': Autonomous AI refund investigation engine for high-value claims (> ₹1,000). Executes ONLY AFTER the customer has submitted evidence/photos and the purchase bill. Evaluates transaction status, customer evidence, and policy rules, and dispatches the Escalation Dossier to the Merchant Portal.
 
 OPERATIONAL RULES & PROTOCOL:
 1. TOOL CALLING:
@@ -436,23 +544,52 @@ OPERATIONAL RULES & PROTOCOL:
    - If the user asks to pay for an unpaid order or wants a payment link / QR code, execute 'create_payment_link' with the order_id.
    - For general Razorpay questions, provide clear, authoritative guidance based on official Razorpay documentation.
 
-2. AUTONOMOUS REFUND INVESTIGATION & ESCALATION PROTOCOL:
-   - When a user asks for a refund, return, or compensation:
-     a) FIRST, lookup the payment using 'get_payment_details' (or 'search_payments') to verify that the payment is captured and obtain the amount and method.
-     b) SECOND, inspect any attached customer documents/evidence (damage photos, courier slips, invoices).
-     c) THIRD, evaluate against the High-Value Threshold (> ₹1,000):
-        - If the amount is > ₹1,000, DO NOT finalize an automated refund directly.
-        - Call 'investigate_and_escalate_refund' with the payment_id, amount, customer reason, calculated validity_score (0-100), risk_level, ai_summary, and recommendation.
-        - Present the customer with a structured Investigation Dossier in Markdown:
-          | Field | AI Investigation Finding |
-          | :--- | :--- |
-          | **Claim Reference** | \`REF-CLAIM-XXXX\` |
-          | **Payment ID** | \`pay_...\` |
-          | **Amount** | **₹X,XXX.00** |
-          | **AI Validity Score** | 🛡️ **XX% (High Validity)** |
-          | **Risk Level** | 🟢 Low Risk |
-          | **Escalation Status** | ⏳ Forwarded to Merchant Portal for Sign-Off |
-        - Inform the customer that their claim and evidence have been sent to the vendor's escalation desk, and they will receive an immediate confirmation once approved!
+2. MANDATORY REFUND VERIFICATION PROTOCOL (EVIDENCE & BILL REQUIRED):
+   - When a user asks for a refund, return, or replacement (e.g., "i want a refund", "received a defected order", "item damaged", "wrong item"):
+     a) FIRST: Lookup and verify the transaction:
+        - Call 'get_payment_details' (or 'search_payments') to verify that the payment is captured, note the amount, order ID, and transaction method.
+        - Present the transaction verification in a structured table so the customer knows their transaction is identified.
+     b) SECOND: CHECK FOR MANDATORY PROOFS & BILL (STRICT REQUIREMENT):
+        - Under merchant return and dispute policies, a customer refund claim CANNOT be processed without:
+          1. 📸 **Evidence / Proof of Defect or Damage**: Clear photo(s) or video of the defective/damaged item, serial number, and packaging.
+          2. 🧾 **Purchase Bill / Invoice**: The official invoice, tax bill, or purchase receipt.
+        - Check the "User-Attached Evidence Documents" section above:
+          - IF NO EVIDENCE OR BILL IS ATTACHED YET:
+            - **DO NOT** execute refund or escalation tools yet.
+            - **DO NOT** claim a refund is completed or forwarded to merchant yet.
+            - Explicitly and politely ask the customer to provide:
+              1. **Photos or proof of the defect/damage** showing the issue clearly.
+              2. **The purchase bill / invoice / receipt** for the order.
+            - Direct the customer to use the **"Attach Document" / file upload panel** on the right side of the chat to attach their photos and bill.
+            - Explain that as soon as they attach their proof and bill, the AI will immediately evaluate and execute the refund!
+     c) THIRD: EXECUTE REFUND OR ESCALATE (ONCE PROOF & BILL ARE ATTACHED):
+        - Once the customer has uploaded/attached their proof of defect and bill/invoice:
+          - **RULE FOR LOW-VALUE AMOUNTS (AMOUNT <= ₹1,000, e.g. ₹500):**
+            - **DO NOT ESCALATE TO THE MERCHANT / VENDOR!**
+            - The AI has autonomous settlement authority for purchases up to ₹1,000.
+            - Immediately invoke **'create_direct_refund'** with \`payment_id\`, \`amount\` (e.g. 500), and \`reason\`!
+            - Present the customer with an Instant Refund Success table:
+              | Field | Refund Confirmation |
+              | :--- | :--- |
+              | **Refund ID** | \`rfnd_...\` |
+              | **Payment ID** | \`pay_...\` |
+              | **Amount Refunded** | **₹500.00** |
+              | **Refund Status** | 🟢 **Processed (Instant)** |
+              | **Settlement Mode** | ⚡ Autonomous AI Gateway Settlement |
+            - Reassure the customer that the amount has been reversed to their original payment method and an instant confirmation has been recorded.
+          - **RULE FOR HIGH-VALUE AMOUNTS (AMOUNT > ₹1,000):**
+            - Purchases exceeding ₹1,000 require merchant sign-off.
+            - Invoke **'investigate_and_escalate_refund'** with \`payment_id\`, \`amount\`, customer reason, calculated validity_score (0-100), risk_level, ai_summary, and recommendation.
+            - Present the customer with the structured Investigation Dossier in Markdown using the returned claim_id:
+              | Field | AI Investigation Finding |
+              | :--- | :--- |
+              | **Claim Reference** | \`CLAIM_ID_FROM_TOOL\` |
+              | **Payment ID** | \`pay_...\` |
+              | **Amount** | **₹X,XXX.00** |
+              | **AI Validity Score** | 🛡️ **XX% (High Validity)** |
+              | **Risk Level** | 🟢 Low Risk |
+              | **Escalation Status** | ⏳ Forwarded to Merchant Portal for Sign-Off |
+            - Inform the customer that their high-value claim (> ₹1,000) has been dispatched to the merchant escalation desk for authorization.
 
 3. PAYMENT LINKS & UPI QR CODES:
    - When 'create_payment_link' is called or when providing payment access:
