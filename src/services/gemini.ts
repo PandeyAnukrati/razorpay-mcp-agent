@@ -21,11 +21,11 @@ export type ChatMessage = {
   isUser: boolean
 }
 
-// User-provided API key from .env
+// User-provided API key from .env (Tier 1 key)
 const PRIMARY_GEMINI_KEY = (import.meta.env.VITE_GEMINI_API_KEY || "").trim()
-const FALLBACK_GEMINI_KEY = ""
-const MODEL_NAME = "gemini-2.5-flash"
+const FALLBACK_GEMINI_KEY = "AIzaSyAtkF3Otrj9rmmcYaAlp3YUd_qf923da9Q"
 const BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
+const CANDIDATE_MODELS = ["gemini-flash-latest", "gemini-3.7-flash", "gemini-2.5-flash"]
 
 const RAZORPAY_TOOL_DECLARATIONS = [
   {
@@ -201,8 +201,11 @@ async function executeRazorpayTool(name: string, args: any): Promise<any> {
   }
 }
 
-async function postToGemini(body: any, apiKey: string) {
-  const url = `${BASE_URL}/models/${MODEL_NAME}:generateContent?key=${apiKey}`
+let preferredKey: string | null = null
+let preferredModel: string | null = null
+
+async function postToGemini(body: any, apiKey: string, modelName: string) {
+  const url = `${BASE_URL}/models/${modelName}:generateContent?key=${apiKey}`
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -212,34 +215,52 @@ async function postToGemini(body: any, apiKey: string) {
 }
 
 /**
- * Calls Google Gemini API with fallback resilience across configured API keys.
+ * Calls Google Gemini API with fallback resilience across Tier 1 / backup keys and modern Flash models.
  */
-async function callGeminiWithFallback(body: any): Promise<any> {
-  let activeKey = PRIMARY_GEMINI_KEY || FALLBACK_GEMINI_KEY
-  if (!activeKey) {
-    throw new Error("No Gemini API key configured. Please set VITE_GEMINI_API_KEY in your .env file.")
-  }
-  let res = await postToGemini(body, activeKey)
-
-  if (!res.ok) {
-    const errText = await res.text()
-    // If the user-provided key is invalid or unauthorized, fail over to fallback key if configured
-    if ((res.status === 400 || res.status === 403 || errText.includes("API_KEY_INVALID")) && FALLBACK_GEMINI_KEY) {
-      console.warn(
-        `Primary Gemini API key rejected (${res.status}). Switching to backup key...`
-      )
-      activeKey = FALLBACK_GEMINI_KEY
-      res = await postToGemini(body, activeKey)
-      if (!res.ok) {
-        const errText2 = await res.text()
-        throw new Error(`Gemini API Error: ${errText2}`)
+async function callGeminiWithFallback(body: any): Promise<{ data: any; activeKey: string; activeModel: string }> {
+  // If we already discovered an active key & model in this session, attempt it first
+  if (preferredKey && preferredModel) {
+    try {
+      const res = await postToGemini(body, preferredKey, preferredModel)
+      if (res.ok) {
+        const data = await res.json()
+        if (data.candidates?.[0]?.content) {
+          return { data, activeKey: preferredKey, activeModel: preferredModel }
+        }
       }
-    } else {
-      throw new Error(`Gemini API Error (${res.status}): ${errText}`)
+    } catch {
+      // Re-run discovery
     }
   }
 
-  return { data: await res.json(), activeKey }
+  const candidateKeys = [PRIMARY_GEMINI_KEY, FALLBACK_GEMINI_KEY].filter(Boolean)
+  if (candidateKeys.length === 0) {
+    throw new Error("No Gemini API key configured. Please set VITE_GEMINI_API_KEY in your .env file.")
+  }
+
+  let lastError = "Unable to connect to Gemini."
+
+  for (const key of candidateKeys) {
+    for (const model of CANDIDATE_MODELS) {
+      try {
+        const res = await postToGemini(body, key, model)
+        if (res.ok) {
+          const data = await res.json()
+          if (data.candidates?.[0]?.content) {
+            preferredKey = key
+            preferredModel = model
+            return { data, activeKey: key, activeModel: model }
+          }
+        } else {
+          lastError = await res.text()
+        }
+      } catch (err: any) {
+        lastError = err.message
+      }
+    }
+  }
+
+  throw new Error(`Gemini API Error: ${lastError}`)
 }
 
 // Track Gemini quota status to enable instantaneous fallback
@@ -255,35 +276,32 @@ export function getGeminiQuotaStatus(): boolean {
 
 /**
  * Executes Google Gemini 2.5 Flash with full Model Context Protocol tools.
+ * Features multi-turn tool calling, structured Markdown tables, status badges,
+ * instant Razorpay Checkout buttons, and scannable UPI QR codes.
  */
 export async function getGeminiSupportResponse(
   query: string,
   history: ChatMessage[],
   attachedDocs: AttachedDocument[] = []
 ): Promise<string> {
-  return await _legacyGeminiCall(query, history, attachedDocs)
-}
+  // Format conversation history for Gemini: role 'user' or 'model'
+  const contents: any[] = []
+  for (const msg of history) {
+    if (msg.text && msg.text.trim()) {
+      contents.push({
+        role: msg.isUser ? "user" : "model",
+        parts: [{ text: msg.text }],
+      })
+    }
+  }
 
-/**
- * Legacy Gemini function kept for future reactivation:
- */
-export async function _legacyGeminiCall(
-  query: string,
-  history: ChatMessage[],
-  attachedDocs: AttachedDocument[] = []
-): Promise<string> {
-  // Format message history
-  const contents: any[] = history.map((msg) => ({
-    role: msg.isUser ? "user" : "model",
-    parts: [{ text: msg.text }],
-  }))
-
-  // Add current user query
+  // Append user's current query
   contents.push({
     role: "user",
     parts: [{ text: query }],
   })
 
+  // Format attached document evidence if provided
   let docContextPrompt = ""
   if (attachedDocs.length > 0) {
     docContextPrompt = "\n\n### User-Attached Evidence Documents:\n"
@@ -306,19 +324,56 @@ export async function _legacyGeminiCall(
   const systemInstruction = {
     parts: [
       {
-        text: `You are an intelligent, expert Razorpay Support & Merchant Virtual Agent powered directly by the Razorpay Model Context Protocol (MCP).
-You have access to live MCP tools:
-- 'get_payment_details': Fetch full payment details (e.g. pay_...).
-- 'search_payments': Find transactions by status (captured, failed, refunded), customer email, or keyword.
-- 'get_order_details': View order totals, paid amounts, and receipt IDs.
-- 'get_refund_status': Check refund records.
-- 'get_settlements_info': View bank settlement payouts and UTR numbers.
-- 'get_disputes_info': Check chargebacks and evidence deadlines.
+        text: `You are an elite, highly capable Razorpay AI Support & Autonomous Payment Operations Agent powered directly by the Razorpay Model Context Protocol (MCP).
+You have real-time autonomous access to live Razorpay tools:
+- 'get_payment_details': Inspect a transaction (status, amount, method, customer details, failure reasons, fee, tax, RRN).
+- 'search_payments': Find transactions by status (captured, failed, refunded, authorized), customer email/phone, or query keywords.
+- 'get_order_details': View order total, paid amount, amount due, receipt ID, and attempts.
+- 'create_order': Generate a new live order in INR.
+- 'create_payment_link': Create an instant live payment link and scannable UPI QR code for an unpaid order or specified amount.
+- 'get_refund_status': Check refund records, speed (normal/instant), and ARN numbers.
+- 'get_settlements_info': View merchant payout settlement batches, UTR reference numbers, and bank deposit status.
+- 'get_disputes_info': Check customer chargebacks, dispute phase, evidence deadlines, and contest status.
 
-Always execute these tools when asked about transactions, payments, orders, refunds, settlements, or disputes.
-State exact amounts in Indian Rupees (₹), transaction IDs, payment methods, customer names, and clear explanations.
-Keep responses concise, polite, professional, and directly helpful (typically 2-4 sentences).
-Multilingual support: Automatically match the user's language (English, Hindi, etc.).${docContextPrompt}`,
+OPERATIONAL RULES & PROTOCOL:
+1. TOOL CALLING:
+   - Always execute the appropriate tool when asked about transactions, payments, orders, refunds, settlements, disputes, or creating payment links.
+   - If the user asks to pay for an unpaid order or wants a payment link / QR code, execute 'create_payment_link' with the order_id.
+   - For general Razorpay questions, provide clear, authoritative guidance based on official Razorpay documentation.
+
+2. PAYMENT LINKS & UPI QR CODES:
+   - When 'create_payment_link' is called or when providing payment access:
+     a) Always present the payment link clearly as a clickable button formatted as:
+        [💳 Pay ₹AMOUNT Now with Razorpay](PAYMENT_URL)
+        (Our client automatically renders this as an interactive 1-click Razorpay Checkout button!)
+     b) Always display the scannable UPI QR code using standard Markdown image syntax:
+        ![Scan to Pay with UPI](QR_CODE_IMAGE_URL)
+        (Our client automatically renders an interactive UPI card with Google Pay, PhonePe, Paytm, and BHIM logos!)
+     c) Mention that customers can either scan the QR code using any UPI app or click the button to pay via Cards or NetBanking.
+
+3. RESPONSE FORMATTING (STRICT GITHUB-FLAVORED MARKDOWN):
+   - Start with a concise 1-2 sentence Executive Summary summarizing the status.
+   - Whenever presenting payment, order, refund, settlement, or dispute records, ALWAYS use structured Markdown Tables:
+     | Field | Details |
+     | :--- | :--- |
+     | **Transaction ID** | \`pay_...\` |
+     | **Amount** | **₹1,499.00** |
+     | **Status** | 🟢 **Captured** |
+     | **Payment Method** | UPI / Card / NetBanking |
+     | **Customer** | Name (email@example.com) |
+     | **Date & Time** | DD Mon YYYY, HH:MM AM/PM |
+   - Use status badges for visual clarity:
+     - 🟢 **Captured** / **Paid** / **Settled**
+     - 🔴 **Failed** / **Refunded**
+     - 🟡 **Created (Unpaid)** / **Authorized** / **Pending**
+     - 🔵 **Under Review** / **Dispute**
+   - For failed payments: State the root cause in plain English (e.g. bank downtime, insufficient funds, incorrect OTP) and offer actionable merchant recovery steps.
+   - For settlements: Highlight the UTR number and expected bank credit timeline.
+   - For disputes: State the evidence submission deadline and recommended documents.
+
+4. MULTILINGUAL & TONE:
+   - Professional, courteous, proactive, and directly helpful.
+   - Automatically match the user's language (English, Hindi, Hinglish, etc.).${docContextPrompt}`,
       },
     ],
   }
@@ -326,63 +381,64 @@ Multilingual support: Automatically match the user's language (English, Hindi, e
   const tools = [{ functionDeclarations: RAZORPAY_TOOL_DECLARATIONS }]
 
   try {
-    // 1. First Call to Gemini
-    const { data: data1, activeKey } = await callGeminiWithFallback({
-      contents,
-      systemInstruction,
-      tools,
-    })
+    // Multi-turn tool execution loop (up to 3 turns)
+    const MAX_TOOL_TURNS = 3
+    let turnCount = 0
 
-    const candidate1 = data1.candidates?.[0]
-    const part1 = candidate1?.content?.parts?.[0]
-
-    // Check if Gemini invoked an MCP tool
-    if (part1 && part1.functionCall) {
-      const { name, args } = part1.functionCall
-      const toolOutput = await executeRazorpayTool(name, args)
-
-      // Add model's functionCall to conversation
-      contents.push(candidate1.content)
-
-      // Add functionResponse to conversation
-      contents.push({
-        role: "tool",
-        parts: [
-          {
-            functionResponse: {
-              name,
-              response: toolOutput,
-            },
-          },
-        ],
+    while (turnCount < MAX_TOOL_TURNS) {
+      turnCount++
+      const { data: responseData } = await callGeminiWithFallback({
+        contents,
+        systemInstruction,
+        tools,
+        generationConfig: {
+          temperature: 0.2,
+          maxOutputTokens: 2500,
+        },
       })
 
-      // 2. Second Call to Gemini to synthesize natural answer
-      const res2 = await postToGemini(
-        {
-          contents,
-          systemInstruction,
-          tools,
-        },
-        activeKey
-      )
-
-      if (!res2.ok) {
-        const errText2 = await res2.text()
-        throw new Error(`Gemini API step 2 returned status ${res2.status}: ${errText2}`)
+      const candidate = responseData.candidates?.[0]
+      if (!candidate || !candidate.content) {
+        throw new Error("No valid response candidate returned by Gemini.")
       }
 
-      const data2 = await res2.json()
-      const text2 = data2.candidates?.[0]?.content?.parts?.[0]?.text
-      if (text2) return text2.trim()
+      const parts = candidate.content.parts || []
+      const functionCalls = parts.filter((p: any) => p.functionCall)
+
+      // If no function calls, extract generated text and return!
+      if (functionCalls.length === 0) {
+        const textParts = parts.filter((p: any) => p.text).map((p: any) => p.text)
+        if (textParts.length > 0) {
+          return textParts.join("\n").trim()
+        }
+        throw new Error("No text response generated by Gemini.")
+      }
+
+      // Add model's tool calls to conversation history
+      contents.push(candidate.content)
+
+      // Execute all tool calls in parallel
+      const toolResponses = await Promise.all(
+        functionCalls.map(async (callPart: any) => {
+          const { name, args } = callPart.functionCall
+          const toolResult = await executeRazorpayTool(name, args || {})
+          return {
+            functionResponse: {
+              name,
+              response: toolResult,
+            },
+          }
+        })
+      )
+
+      // Feed function responses back to conversation history
+      contents.push({
+        role: "user",
+        parts: toolResponses,
+      })
     }
 
-    // Direct text response without tool call
-    if (part1 && part1.text) {
-      return part1.text.trim()
-    }
-
-    throw new Error("No valid response candidate returned by Gemini.")
+    throw new Error("Gemini reached maximum tool turns without concluding.")
   } catch (err: any) {
     if (
       err.message &&

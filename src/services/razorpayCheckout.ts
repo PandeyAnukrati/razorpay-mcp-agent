@@ -92,6 +92,13 @@ export function openRazorpayCheckout({
         console.error("Failed to post payment webhook:", err)
       }
 
+      // Notify dashboard listener immediately
+      window.dispatchEvent(
+        new CustomEvent("razorpay_checkout_success", {
+          detail: { response, orderId, amount: amountInPaise },
+        })
+      )
+
       if (onSuccess) onSuccess(response)
     },
     modal: {

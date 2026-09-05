@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 import { Button } from "@/components/ui/button"
-import { getClaudeSupportResponse } from "@/services/claude"
+// Claude commented out - pure Gemini runtime
+// import { getClaudeSupportResponse } from "@/services/claude"
+import { getGeminiSupportResponse } from "@/services/gemini"
 import { MarkdownRenderer } from "@/components/MarkdownRenderer"
 import { auth } from "@/lib/firebase"
 import { onAuthStateChanged } from "firebase/auth"
@@ -268,82 +270,95 @@ export function Dashboard() {
         const events = await getWebhookEvents()
         if (!isMounted || !events || events.length === 0) return
 
-        // On first run, mark existing events so we don't replay history
-        if (processedWebhookIdsRef.current.size === 0) {
-          events.forEach((ev) => processedWebhookIdsRef.current.add(ev.id))
-          return
-        }
+        setSessions((prev) => {
+          if (!prev || prev.length === 0) return prev
 
-        // Identify new unhandled events
-        const newEvents = events.filter((ev) => !processedWebhookIdsRef.current.has(ev.id))
-        if (newEvents.length === 0) return
+          const currentSession = prev.find((s) => s.id === activeSessionId) || prev[0]
+          if (!currentSession) return prev
 
-        newEvents.forEach((ev) => processedWebhookIdsRef.current.add(ev.id))
+          // Check which events are not yet in currentSession messages
+          const toAdd: Message[] = []
+          for (const ev of [...events].reverse()) {
+            const p = ev.payload?.payload?.payment?.entity
+            const o = ev.payload?.payload?.order?.entity
+            const paymentId = p?.id
+            const orderId = p?.order_id || o?.id
 
-        // Process each new event into the chat stream in chronological order
-        newEvents.reverse().forEach((ev) => {
-          const isPaid = ev.event.includes("paid") || ev.event.includes("captured")
-          const isFail = ev.event.includes("failed")
-          const isRefund = ev.event.includes("refund")
-          const isDispute = ev.event.includes("dispute")
+            // Check if already in this session's messages
+            const alreadyInSession = currentSession.messages.some(
+              (m) =>
+                m.id === `wh-notice-${ev.id}` ||
+                (paymentId && m.text.includes(paymentId)) ||
+                (orderId && m.text.includes(orderId) && m.text.includes("Payment Confirmed")) ||
+                m.text.includes(ev.id)
+            )
 
-          let messageMarkdown = ""
-          const p = ev.payload?.payload?.payment?.entity
-          const o = ev.payload?.payload?.order?.entity
-          const r = ev.payload?.payload?.refund?.entity
-          const d = ev.payload?.payload?.dispute?.entity
+            if (!alreadyInSession && !processedWebhookIdsRef.current.has(ev.id)) {
+              processedWebhookIdsRef.current.add(ev.id)
 
-          if (isPaid) {
-            const amountFormatted = p?.amount
-              ? `₹${(p.amount / 100).toFixed(2)}`
-              : o?.amount
-              ? `₹${(o.amount / 100).toFixed(2)}`
-              : "₹1,499.00"
+              const isPaid = ev.event.includes("paid") || ev.event.includes("captured")
+              const isFail = ev.event.includes("failed")
+              const isRefund = ev.event.includes("refund")
+              const isDispute = ev.event.includes("dispute")
 
-            messageMarkdown = `🎉 **Payment Confirmed via Razorpay Webhook**\n\n| Field | Value |\n|---|---|\n| **Webhook Event** | \`${ev.event}\` |\n| **Payment ID** | \`${p?.id || "pay_live_captured"}\` |\n| **Order ID** | \`${p?.order_id || o?.id || "order_TXGPnb2izSqLLF"}\` |\n| **Amount Paid** | **${amountFormatted}** |\n| **Payment Method** | ${p?.method ? p.method.toUpperCase() : "UPI / Card"} |\n| **Status** | 🟢 **Captured (Success)** |\n| **Verification** | HMAC SHA256 Signature Verified |\n\n✅ Your payment was successfully received and captured by Razorpay. Your order is now marked as **PAID**!`
-          } else if (isFail) {
-            const errDesc = p?.error_description || "Customer payment authorization was declined."
-            const errCode = p?.error_code || "BAD_REQUEST_ERROR"
-            const amountFormatted = p?.amount ? `₹${(p.amount / 100).toFixed(2)}` : "₹1,499.00"
+              let messageMarkdown = ""
+              const r = ev.payload?.payload?.refund?.entity
+              const d = ev.payload?.payload?.dispute?.entity
 
-            messageMarkdown = `🚨 **Payment Failed Alert via Razorpay Webhook**\n\n| Field | Value |\n|---|---|\n| **Webhook Event** | \`${ev.event}\` |\n| **Payment ID** | \`${p?.id || "pay_live_failed"}\` |\n| **Order ID** | \`${p?.order_id || "N/A"}\` |\n| **Amount Attempted** | ${amountFormatted} |\n| **Status** | 🔴 **Failed** |\n| **Error Code** | \`${errCode}\` |\n| **Reason** | ${errDesc} |\n\n⚠️ Would you like me to generate a new payment link or QR code to retry?`
-          } else if (isRefund) {
-            const amountFormatted = r?.amount ? `₹${(r.amount / 100).toFixed(2)}` : "₹499.00"
-            messageMarkdown = `💸 **Refund Processed via Razorpay Webhook**\n\n| Field | Value |\n|---|---|\n| **Refund ID** | \`${r?.id || "rfnd_live"}\` |\n| **Payment ID** | \`${r?.payment_id || "N/A"}\` |\n| **Amount Refunded** | ${amountFormatted} |\n| **Status** | 🟢 **Processed** |\n\nReversal has been completed and will reflect in the customer's bank account.`
-          } else if (isDispute) {
-            messageMarkdown = `⚠️ **Dispute Alert via Razorpay Webhook**\n\n| Field | Value |\n|---|---|\n| **Dispute ID** | \`${d?.id || "disp_live"}\` |\n| **Payment ID** | \`${d?.payment_id || "N/A"}\` |\n| **Amount** | ₹${((d?.amount || 0) / 100).toFixed(2)} |\n| **Reason** | \`${d?.reason_code || "fraudulent"}\` |\n| **Status** | Under Review |\n\nAction required: Merchant evidence is needed before the deadline.`
-          } else {
-            messageMarkdown = `⚡ **Razorpay Webhook Received**\n\nEvent: \`${ev.event}\` (HMAC Verified)`
-          }
+              if (isPaid) {
+                const amountFormatted = p?.amount
+                  ? `₹${(p.amount / 100).toFixed(2)}`
+                  : o?.amount
+                  ? `₹${(o.amount / 100).toFixed(2)}`
+                  : "₹1,499.00"
 
-          const webhookNoticeMsg: Message = {
-            id: `wh-notice-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-            text: messageMarkdown,
-            isUser: false,
-            timestamp: new Date().toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            }),
-          }
+                messageMarkdown = `🎉 **Payment Confirmed via Razorpay Webhook**\n\n| Field | Value |\n|---|---|\n| **Webhook Event** | \`${ev.event}\` |\n| **Payment ID** | \`${p?.id || "pay_live_captured"}\` |\n| **Order ID** | \`${p?.order_id || o?.id || "order_TXGPnb2izSqLLF"}\` |\n| **Amount Paid** | **${amountFormatted}** |\n| **Payment Method** | ${p?.method ? p.method.toUpperCase() : "UPI / Card"} |\n| **Status** | 🟢 **Captured (Success)** |\n| **Verification** | HMAC SHA256 Signature Verified |\n\n✅ Your payment was successfully received and captured by Razorpay. Your order is now marked as **PAID**!`
+              } else if (isFail) {
+                const errDesc = p?.error_description || "Customer payment authorization was declined."
+                const errCode = p?.error_code || "BAD_REQUEST_ERROR"
+                const amountFormatted = p?.amount ? `₹${(p.amount / 100).toFixed(2)}` : "₹1,499.00"
 
-          setSessions((prev) => {
-            const targetId = activeSessionId || prev[0]?.id || "CHAT-MCP-01"
-            let targetSession: ChatSession | undefined
-            const next = prev.map((s) => {
-              if (s.id === targetId) {
-                targetSession = {
-                  ...s,
-                  messages: [...s.messages, webhookNoticeMsg],
-                }
-                return targetSession
+                messageMarkdown = `🚨 **Payment Failed Alert via Razorpay Webhook**\n\n| Field | Value |\n|---|---|\n| **Webhook Event** | \`${ev.event}\` |\n| **Payment ID** | \`${p?.id || "pay_live_failed"}\` |\n| **Order ID** | \`${p?.order_id || "N/A"}\` |\n| **Amount Attempted** | ${amountFormatted} |\n| **Status** | 🔴 **Failed** |\n| **Error Code** | \`${errCode}\` |\n| **Reason** | ${errDesc} |\n\n⚠️ Would you like me to generate a new payment link or QR code to retry?`
+              } else if (isRefund) {
+                const amountFormatted = r?.amount ? `₹${(r.amount / 100).toFixed(2)}` : "₹499.00"
+                messageMarkdown = `💸 **Refund Processed via Razorpay Webhook**\n\n| Field | Value |\n|---|---|\n| **Refund ID** | \`${r?.id || "rfnd_live"}\` |\n| **Payment ID** | \`${r?.payment_id || "N/A"}\` |\n| **Amount Refunded** | ${amountFormatted} |\n| **Status** | 🟢 **Processed** |\n\nReversal has been completed and will reflect in the customer's bank account.`
+              } else if (isDispute) {
+                messageMarkdown = `⚠️ **Dispute Alert via Razorpay Webhook**\n\n| Field | Value |\n|---|---|\n| **Dispute ID** | \`${d?.id || "disp_live"}\` |\n| **Payment ID** | \`${d?.payment_id || "N/A"}\` |\n| **Amount** | ₹${((d?.amount || 0) / 100).toFixed(2)} |\n| **Reason** | \`${d?.reason_code || "fraudulent"}\` |\n| **Status** | Under Review |\n\nAction required: Merchant evidence is needed before the deadline.`
+              } else {
+                messageMarkdown = `⚡ **Razorpay Webhook Received**\n\nEvent: \`${ev.event}\` (HMAC Verified)`
               }
-              return s
-            })
-            if (user?.uid && targetSession) {
-              saveSessionToFirebase(user.uid, targetSession).catch(console.error)
+
+              toAdd.push({
+                id: `wh-notice-${ev.id}`,
+                text: messageMarkdown,
+                isUser: false,
+                timestamp: new Date().toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                }),
+              })
             }
-            return next
+          }
+
+          if (toAdd.length === 0) return prev
+
+          // Switch to chat view so user immediately sees the confirmation
+          setCurrentView("chat")
+
+          const next = prev.map((s) => {
+            if (s.id === currentSession.id) {
+              const updated = {
+                ...s,
+                messages: [...s.messages, ...toAdd],
+              }
+              if (user?.uid) {
+                saveSessionToFirebase(user.uid, updated).catch(console.error)
+              }
+              return updated
+            }
+            return s
           })
+          return next
         })
       } catch (err) {
         console.warn("Webhook chat poller check error:", err)
@@ -351,9 +366,17 @@ export function Dashboard() {
     }
 
     const interval = setInterval(checkNewWebhooks, 1500)
+    checkNewWebhooks()
+
+    const onPaymentSuccess = () => {
+      setTimeout(checkNewWebhooks, 300)
+    }
+    window.addEventListener("razorpay_checkout_success", onPaymentSuccess)
+
     return () => {
       isMounted = false
       clearInterval(interval)
+      window.removeEventListener("razorpay_checkout_success", onPaymentSuccess)
     }
   }, [activeSessionId, user])
 
@@ -626,7 +649,8 @@ export function Dashboard() {
     setIsTyping(true)
 
     try {
-      const reply = await getClaudeSupportResponse(
+      // Pure Google Gemini 2.5 Flash with Razorpay MCP tool calling
+      const reply = await getGeminiSupportResponse(
         userMsg.text,
         currentMessages,
         activeFiles.map((f) => ({
@@ -664,7 +688,7 @@ export function Dashboard() {
         return next
       })
     } catch (err: any) {
-      console.error("Claude / MCP error:", err)
+      console.error("Gemini / MCP error:", err)
       const fallbackReply = `⚠️ Razorpay MCP Response: ${
         err.message || "Please verify your Razorpay Key ID and Secret in MCP Settings."
       }`

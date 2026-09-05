@@ -2,7 +2,9 @@
  * Razorpay Webhook Automation & AI Triage Service
  */
 
-import { getClaudeSupportResponse } from "./claude"
+// Claude commented out - pure Gemini runtime
+// import { getClaudeSupportResponse } from "./claude"
+import { getGeminiSupportResponse } from "./gemini"
 
 export interface WebhookEventRecord {
   id: string
@@ -93,7 +95,7 @@ Provide an automated triage decision in JSON format with:
 Respond ONLY with valid JSON.`
 
   try {
-    const aiResponse = await getClaudeSupportResponse(prompt, [])
+    const aiResponse = await getGeminiSupportResponse(prompt, [])
     const cleanedJson = aiResponse.replace(/```json/g, "").replace(/```/g, "").trim()
     const parsed = JSON.parse(cleanedJson)
     return {
