@@ -12,6 +12,7 @@ import {
   CheckCircle2,
   ArrowLeft,
   CheckCircle,
+  Building2,
 } from "lucide-react"
 import { auth } from "@/lib/firebase"
 import {
@@ -233,6 +234,23 @@ export function Auth() {
         >
           <ArrowLeft className="h-4.5 w-4.5" />
         </button>
+
+        {/* Top Right Merchant Login Button */}
+        <div className="absolute top-6 right-6 lg:right-16 flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => {
+              localStorage.setItem("rzp_merchant_logged_in", "true")
+              localStorage.setItem("rzp_merchant_email", "merchant@razorpay.com")
+              localStorage.setItem("rzp_current_view", "merchant")
+              navigate("/dashboard")
+            }}
+            className="h-9 px-3.5 rounded-xl border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 dark:text-amber-400 font-bold text-xs shadow-sm flex items-center gap-1.5 cursor-pointer"
+          >
+            <Building2 className="h-3.5 w-3.5 text-amber-500" />
+            <span>👑 Merchant Login</span>
+          </Button>
+        </div>
 
         {/* Top Logo for mobile view only */}
         <div className="lg:hidden absolute top-7 right-6">
