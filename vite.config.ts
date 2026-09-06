@@ -104,12 +104,6 @@ export default defineConfig({
         secure: true,
         rewrite: (path) => path.replace(/^\/api\/razorpay/, ""),
       },
-      "/api/claude": {
-        target: "https://api.anthropic.com/v1",
-        changeOrigin: true,
-        secure: true,
-        rewrite: (path) => path.replace(/^\/api\/claude/, ""),
-      },
     },
   },
 })

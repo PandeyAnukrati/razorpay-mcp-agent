@@ -2,8 +2,6 @@
  * Razorpay Webhook Automation & AI Triage Service
  */
 
-// Claude commented out - pure Gemini runtime
-// import { getClaudeSupportResponse } from "./claude"
 import { getGeminiSupportResponse } from "./gemini"
 
 export interface WebhookEventRecord {

@@ -1,8 +1,6 @@
 import { useState, useEffect, useRef } from "react"
 import { useNavigate, useLocation } from "react-router-dom"
 import { Button } from "@/components/ui/button"
-// Claude commented out - pure Gemini runtime
-// import { getClaudeSupportResponse } from "@/services/claude"
 import { getGeminiSupportResponse } from "@/services/gemini"
 import { MarkdownRenderer } from "@/components/MarkdownRenderer"
 import { auth } from "@/lib/firebase"

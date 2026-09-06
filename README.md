@@ -9,14 +9,13 @@
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-v4-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
 [![Model Context Protocol](https://img.shields.io/badge/MCP-Protocol_2.0-8A2BE2?style=for-the-badge&logo=anthropic&logoColor=white)](https://modelcontextprotocol.io/)
 [![Razorpay](https://img.shields.io/badge/Razorpay-Live_API-0C2340?style=for-the-badge&logo=razorpay&logoColor=3395FF)](https://razorpay.com/)
-[![Anthropic Claude](https://img.shields.io/badge/Claude-Haiku_%2F_Sonnet-D97706?style=for-the-badge&logo=anthropic&logoColor=white)](https://anthropic.com/)
 [![Google Gemini](https://img.shields.io/badge/Google_Gemini-2.5_Flash-4285F4?style=for-the-badge&logo=google&logoColor=white)](https://deepmind.google/technologies/gemini/)
 [![Firebase](https://img.shields.io/badge/Firebase-Firestore_%26_Auth-FFCA28?style=for-the-badge&logo=firebase&logoColor=black)](https://firebase.google.com/)
 [![GSAP](https://img.shields.io/badge/GSAP-Animations-88CE02?style=for-the-badge&logo=greensock&logoColor=white)](https://greensock.com/gsap/)
 
 <br />
 
-**Razorpay MCP Agent** is an enterprise-grade, autonomous payment operations and merchant support platform. Built on the open **Model Context Protocol (MCP)** specification, it seamlessly interfaces Large Language Models (**Anthropic Claude 3.5** and **Google Gemini 2.5 Flash**) with **Razorpay's Live REST API**. 
+**Razorpay MCP Agent** is an enterprise-grade, autonomous payment operations and merchant support platform. Built on the open **Model Context Protocol (MCP)** specification, it seamlessly interfaces **Google Gemini 2.5 Flash** with **Razorpay's Live REST API**. 
 
 From autonomous payment investigations and failure code diagnosis, to instant order creation, dynamic UPI QR generation, scannable in-chat checkout, and real-time HMAC-verified webhook triage — Razorpay MCP Agent transforms payment workflows into conversational intelligence.
 
@@ -68,7 +67,7 @@ Operating modern payment gateways demands constant vigilance: tracking down fail
 **Razorpay MCP Agent** solves this by establishing a direct bridge between conversational AI agents and Razorpay:
 
 1. **Zero Guesswork / No Mock Data:** Connects directly to official Razorpay endpoints (`/v1/payments`, `/v1/orders`, `/v1/refunds`, `/v1/settlements`, `/v1/payment_links`).
-2. **Standardized Protocol:** Leverages Anthropic's **Model Context Protocol (MCP)** specification so any MCP-compliant client (web UI, CLI, Claude Desktop, Cursor, Antigravity) can manage payments identically.
+2. **Standardized Protocol:** Leverages the open **Model Context Protocol (MCP)** specification so any MCP-compliant client (web UI, CLI, Claude Desktop, Cursor, Antigravity) can manage payments identically.
 3. **Automated Cart Recovery:** Detects payment failure webhooks in milliseconds, consults the AI engine to generate customer-friendly retry notifications, and auto-spins UPI QR codes and payment links.
 4. **Interactive In-Chat Execution:** Users can inspect orders, view real-time breakdown tables, click to open the official Razorpay Checkout modal without leaving the chat, or scan dynamically generated UPI QR codes on their mobile phones.
 
@@ -89,9 +88,9 @@ The application is structured into four primary tiers:
                         ▼                             ▼
 ┌─────────────────────────────────┐       ┌───────────────────────────────────┐
 │     AI ORCHESTRATION LAYER      │       │     CLOUD PERSISTENCE LAYER       │
-│  • Anthropic Claude 3.5 / Haiku │       │  • Firebase Authentication        │
-│  • Google Gemini 2.5 Flash      │       │  • Cloud Firestore Sessions       │
-│  • Dynamic Function Calling     │       │  • Real-Time Chat Synchronization │
+│  • Google Gemini 2.5 Flash      │       │  • Firebase Authentication        │
+│  • Dynamic Function Calling     │       │  • Cloud Firestore Sessions       │
+│  • Real-Time Tool Execution     │       │  • Real-Time Chat Synchronization │
 └───────────────┬─────────────────┘       └───────────────────────────────────┘
                 │
                 ▼
@@ -125,9 +124,7 @@ flowchart TD
     end
 
     subgraph Orchestrator["🧠 AI Orchestration Tier"]
-        Claude["Anthropic Claude<br/>(claude-haiku-4-5)"]
-        Gemini["Google Gemini<br/>(gemini-2.5-flash)"]
-        Router{"AI Model Router<br/>& Tool Dispatcher"}
+        Gemini["Google Gemini 2.5 Flash<br/>(Function Calling & Tool Dispatcher)"]
     end
 
     subgraph MCP["🔌 Model Context Protocol (MCP) Tier"]
@@ -147,10 +144,7 @@ flowchart TD
         Firestore["Cloud Firestore<br/>(Sessions & Message History)"]
     end
 
-    UI --> Router
-    Router --> Claude
-    Router --> Gemini
-    Claude --> ToolList
+    UI --> Gemini
     Gemini --> ToolList
     ToolList --> ClientMCP
     ToolList --> StdioMCP
@@ -172,7 +166,7 @@ sequenceDiagram
     autonumber
     actor Merchant as 👨‍💼 Merchant / Support User
     participant UI as 💬 Chat Interface (React)
-    participant LLM as 🤖 LLM (Claude / Gemini)
+    participant LLM as 🤖 LLM (Google Gemini 2.5 Flash)
     participant MCP as 🔌 Razorpay MCP Client
     participant RZP as 💳 Razorpay Live API
 
@@ -306,10 +300,10 @@ flowchart TD
 
 ## 🚀 Key Features
 
-### 1. Autonomous AI Engine (Dual LLM Core)
-- **Anthropic Claude 3.5 / Haiku:** High-precision intent classifier and complex reasoning engine equipped with native MCP tool declarations.
-- **Google Gemini 2.5 Flash:** Ultra-fast multimodal model capable of analyzing structured JSON, invoice images, and payment logs with zero latency.
-- **Dynamic Fallback:** Seamlessly shifts between models with graceful offline error handling.
+### 1. Autonomous AI Engine (Google Gemini 2.5 Flash)
+- **Google Gemini 2.5 Flash:** High-precision multimodal model capable of analyzing structured JSON, invoice images, and payment logs with zero latency.
+- **Native MCP Tool Declarations:** Direct function calling integration with Razorpay REST endpoints.
+- **Autonomous Reasoning & Triage:** Analyzes webhook failures, auto-generates recovery payment links and dynamic UPI QR codes.
 
 ### 2. Live Model Context Protocol (MCP) Protocol
 - **Official Specification Compliant:** Implements `@modelcontextprotocol/sdk` v1.30.
@@ -395,7 +389,6 @@ razorpay-agent/
 │   │   ├── Dashboard.tsx               # Main application dashboard, chat, and MCP explorer
 │   │   └── Landing.tsx                 # Clean product landing page with quick-start action
 │   ├── services/
-│   │   ├── claude.ts                   # Anthropic Claude client with tool declarations
 │   │   ├── gemini.ts                   # Google Gemini Flash client with function declarations
 │   │   ├── firebaseChat.ts             # Firestore session sync & migration utilities
 │   │   ├── mcpClient.ts                # In-browser MCP client calling Razorpay REST API
@@ -420,7 +413,7 @@ razorpay-agent/
 - **Node.js**: v18.0.0 or higher
 - **npm** or **pnpm**
 - A **Razorpay Account** (Test Mode credentials work out of the box)
-- *(Optional)* **Anthropic API Key** or **Google Gemini API Key** for LLM orchestration
+- *(Optional)* **Google Gemini API Key** for LLM orchestration
 
 ### Installation
 
@@ -458,7 +451,6 @@ VITE_RAZORPAY_KEY_SECRET=YOUR_KEY_SECRET
 VITE_RAZORPAY_WEBHOOK_SECRET=rzp_whsec_auto_998877
 
 # AI Orchestration Keys
-VITE_ANTHROPIC_API_KEY=sk-ant-api03-YOUR_KEY
 VITE_GEMINI_API_KEY=AIzaSyYOUR_KEY
 ```
 
@@ -556,7 +548,7 @@ This will create 3 live test orders directly in your Razorpay account with disti
 
 - **Author & Developer:** [Anukrati Pandey](https://github.com/PandeyAnukrati)
 - **Repository:** [PandeyAnukrati/razorpay-mcp-agent](https://github.com/PandeyAnukrati/razorpay-mcp-agent)
-- **Built With:** [Razorpay API](https://razorpay.com/docs/api/), [Model Context Protocol](https://modelcontextprotocol.io/), [Anthropic](https://www.anthropic.com/), [Google Gemini](https://deepmind.google/technologies/gemini/), [Vite](https://vitejs.dev/), [Tailwind CSS](https://tailwindcss.com/)
+- **Built With:** [Razorpay API](https://razorpay.com/docs/api/), [Model Context Protocol](https://modelcontextprotocol.io/), [Google Gemini](https://deepmind.google/technologies/gemini/), [Vite](https://vitejs.dev/), [Tailwind CSS](https://tailwindcss.com/)
 
 ---
 
